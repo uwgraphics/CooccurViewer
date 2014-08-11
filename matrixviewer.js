@@ -6,6 +6,7 @@ var dataReady = false;
 var timer = null;
 
 var shaders = [];
+var textures = [];
 
 var ds = {
   data: [],
@@ -32,6 +33,7 @@ var parseFile = function(text) {
   ds.data = [];
   ds.numPos = lines.length;
   ds.numWindow = lines[0].length;
+  ds.imgData = new Uint8Array(Math.min(8192, ds.numPos) * ds.numWindow * 4);
   
   for (var i = 0; i < lines.length; i++) {
     for (var j = 0; j < ds.numWindow; j++) {
@@ -48,6 +50,23 @@ var parseFile = function(text) {
     }
   }
   
+  // do another pass-through for the imgData array 
+  // (truncate to 0-255 for Uint8 array; maxWidth is 8196, so avg)
+  for (var i = 0; i < ds.data.length; i = i + 2) {
+    if (i + 1 >= ds.data.length) {
+      ds.imgData[(i / 2) * 4] = Math.floor(255 * (ds.data[i][2] / ds.maxVal));
+    } else {
+      ds.imgData[(i / 2) * 4] = 
+        (
+          Math.floor(255 * (ds.data[i][2] / ds.maxVal)) + 
+          Math.floor(255 * (ds.data[i+1][2] / ds.maxVal))
+        ) / 2;
+    }
+    
+    // set alpha to 1 (necessary? could handle this in shader)
+    ds.imgData[(i / 2) * 4 + 3] = 1.0;
+  }
+  
   // compile the GPU data buffer
   ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
   ds.buf.data = ds.data;
@@ -61,7 +80,7 @@ var setInitBounds = function() {
   
   offset = [-(b[0][0] + b[0][1]) / 2.0, -(b[1][0] + b[1][1]) / 2.0];
   
-  scale = Math.max(b[0][1] - b[0][0], b[1][1] - b[1][0]) * 1.2;
+  scale = Math.max(b[0][1] - b[0][0], b[1][1] - b[1][0]);
   scale = gl.canvas.height / scale;
   
   screenOffset = [gl.canvas.width / 2.0, gl.canvas.height / 2.0];
@@ -74,21 +93,56 @@ var setZoomPan = function() {
   gl.translate(offset[0], offset[1], 0);
 };
 
+var texturesCreated = false;
+var createTextures = function() {
+
+  var mipmapOpts = {
+    magFilter: gl.LINEAR,
+    minFilter: gl.LINEAR_MIPMAP_NEAREST,
+    format:    gl.RGBA,
+    type:      gl.UNSIGNED_BYTE
+  };
+  
+  var pot_width  = Math.min(8192, Math.pow(2, Math.ceil(Math.log(ds.numPos) / Math.log(2))));
+  var pot_height = Math.min(8192, Math.pow(2, Math.ceil(Math.log(ds.numWindow) / Math.log(2))));
+  
+  // gotta make the texture from 'scratch'
+  textures['full'] = new GL.Texture(pot_width, pot_height, mipmapOpts);
+  
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, Math.min(8192, ds.numPos), ds.numWindow, textures['full'].format, textures['full'].type, ds.imgData);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  
+  // clean up state
+  gl.bindTexture(gl.TEXTURE_2D, null);
+};
+
 gl.ondraw = function() {
-  if (!dataReady || !shaders['points']) {
-    if (!timer) {
+  if (!dataReady || !shaders['points'] || !shaders['overview']) {
+    //if (!timer) {
       timer = setTimeout("gl.ondraw()", 300);
-    }
+    //}
     return;
   }
   
-  if (timer) {
-    clearTimeout(timer);
-    timer = null;
+  if (!texturesCreated) {
+    createTextures();
   }
   
   gl.clearColor(1.0, 1.0, 1.0, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  
+  // fix plane to the dimensions of the large ds.imgData texture
+  var plane = new GL.Mesh.plane();
+  y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
+  plane.vertices[0][1] = y_min;
+  plane.vertices[1][1] = y_min;
+  plane.compile();
+  
+  textures['full'].bind(0);
+  shaders['overview'].uniforms({
+    texture: 0
+  }).draw(plane);
+  textures['full'].unbind(0);  
   
   gl.enable(gl.DEPTH_TEST);
   gl.disable(gl.BLEND);
@@ -141,8 +195,9 @@ function main() {
   };
   
   loadShaderFromFiles("points");
+  loadShaderFromFiles("overview");
   
-  $.get("readBreadth.csv", parseFile);
+  $.get("readBreadthAll.csv", parseFile);
   
   gl.ondraw();
 };
