@@ -7,6 +7,7 @@ var timer = null;
 
 var shaders = [];
 var textures = [];
+var plane;
 
 var ds = {
   data: [],
@@ -64,7 +65,7 @@ var parseFile = function(text) {
     }
     
     // set alpha to 1 (necessary? could handle this in shader)
-    ds.imgData[(i / 2) * 4 + 3] = 1.0;
+    ds.imgData[(i / 2) * 4 + 3] = 255;
   }
   
   // compile the GPU data buffer
@@ -132,21 +133,22 @@ gl.ondraw = function() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   
   // fix plane to the dimensions of the large ds.imgData texture
-  var plane = new GL.Mesh.plane();
-  y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
+  plane = new GL.Mesh.plane();
+  /* y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
   plane.vertices[0][1] = y_min;
-  plane.vertices[1][1] = y_min;
-  plane.compile();
+  plane.vertices[1][1] = y_min; */
   
-  textures['full'].bind(0);
-  shaders['overview'].uniforms({
-    texture: 0
-  }).draw(plane);
-  textures['full'].unbind(0);  
+  /*plane.vertices[0][1] = -1;
+  plane.vertices[1][1] = -1;
+  plane.vertices[1][0] = textures.full.width / textures.full.height * 2;
+  plane.vertices[3][0] = textures.full.width / textures.full.height * 2;
+  
+  plane.compile();
   
   gl.enable(gl.DEPTH_TEST);
   gl.disable(gl.BLEND);
   
+  /*
   gl.pushMatrix();
   gl.matrixMode(gl.MODELVIEW);
   setZoomPan();
@@ -159,6 +161,13 @@ gl.ondraw = function() {
   }).drawBuffers(vertBuffer, null, gl.POINTS);
   
   gl.popMatrix();
+  */ 
+  
+  textures['full'].bind(0);
+  shaders['overview'].uniforms({
+    texture: 0
+  }).draw(plane);
+  textures['full'].unbind(0);  
 }
 
 var resizeCanvas = function() {
