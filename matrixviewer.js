@@ -53,6 +53,7 @@ var parseFile = function(text) {
   
   // do another pass-through for the imgData array 
   // (truncate to 0-255 for Uint8 array; maxWidth is 8196, so avg)
+  /*
   for (var i = 0; i < ds.data.length; i = i + 2) {
     if (i + 1 >= ds.data.length) {
       ds.imgData[(i / 2) * 4] = Math.floor(255 * (ds.data[i][2] / ds.maxVal));
@@ -67,6 +68,18 @@ var parseFile = function(text) {
     // set alpha to 1 (necessary? could handle this in shader)
     ds.imgData[(i / 2) * 4 + 3] = 255;
   }
+  */
+  
+  for (var i = 0; i < ds.data.length; i = i + 1) {
+    //var imgIndex = ((i % ds.numWindow) * ds.numWindow) + Math.floor(i / ds.numWindow);
+    var imgIndex = i;
+    
+    if (imgIndex >= ds.numWindow * Math.min(8192, ds.numPos)) 
+      continue;
+    
+    ds.imgData[imgIndex * 4] = Math.floor(255 * (ds.data[i][2] / ds.maxVal));
+    ds.imgData[imgIndex * 4 + 3] = 255;
+  }  
   
   // compile the GPU data buffer
   ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
@@ -74,6 +87,35 @@ var parseFile = function(text) {
   ds.buf.compile(gl.STATIC_DRAW);
   
   dataReady = true;
+  
+  debugImg();  
+};
+
+var debugImg = function() {
+  var img = document.createElement("img");
+  
+  // would be nice to do the below, but it blows the stack.  do it iteratively instead
+  // var base64data = btoa(String.fromCharCode.apply(null, ds.imgData));
+  /*var base64data = "";
+  for (var i = 0; i < ds.imgData.length; i++) {
+    base64data += String.fromCharCode(ds.imgData[i]);
+  }
+  
+  base64data = btoa(base64data);
+  img.src = "data:image/png;base64," + base64data;*/
+  
+  // depends on imeplementation 
+  // (see https://developer.mozilla.org/en-US/docs/Web/API/URL.createObjectURL)
+  var thisURL = window.URL || window.webkitURL;
+  
+  var blob = new Blob([ds.imgData], {'type': 'image/bmp'});
+  img.src = thisURL.createObjectURL(blob);
+  img.height = ds.numWindow;
+  img.onload = function(e) { 
+    thisURL.revokeObjectURL(this.src);
+  };
+  
+  document.getElementById("img-container").appendChild(img);
 };
 
 var setInitBounds = function() {
@@ -138,17 +180,21 @@ gl.ondraw = function() {
   plane.vertices[0][1] = y_min;
   plane.vertices[1][1] = y_min; */
   
-  /*plane.vertices[0][1] = -1;
-  plane.vertices[1][1] = -1;
-  plane.vertices[1][0] = textures.full.width / textures.full.height * 2;
-  plane.vertices[3][0] = textures.full.width / textures.full.height * 2;
+  plane.vertices[0][1] = 0;
+  plane.vertices[1][1] = 0;
+  plane.vertices[1][0] = textures.full.width / textures.full.height;
+  plane.vertices[3][0] = textures.full.width / textures.full.height;
   
   plane.compile();
+  
+  gl.disable(gl.DEPTH_TEST);
+  gl.enable(gl.BLEND);
+  
   
   gl.enable(gl.DEPTH_TEST);
   gl.disable(gl.BLEND);
   
-  /*
+
   gl.pushMatrix();
   gl.matrixMode(gl.MODELVIEW);
   setZoomPan();
@@ -161,7 +207,6 @@ gl.ondraw = function() {
   }).drawBuffers(vertBuffer, null, gl.POINTS);
   
   gl.popMatrix();
-  */ 
   
   textures['full'].bind(0);
   shaders['overview'].uniforms({
@@ -206,7 +251,7 @@ function main() {
   loadShaderFromFiles("points");
   loadShaderFromFiles("overview");
   
-  $.get("readBreadthAll.csv", parseFile);
+  $.get("readBreadth.csv", parseFile);
   
   gl.ondraw();
 };
