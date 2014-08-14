@@ -34,7 +34,6 @@ var parseFile = function(text) {
   ds.data = [];
   ds.numPos = lines.length;
   ds.numWindow = lines[0].length;
-  ds.imgData = new Uint8Array(Math.min(8192, ds.numPos) * ds.numWindow * 4);
   
   for (var i = 0; i < lines.length; i++) {
     for (var j = 0; j < ds.numWindow; j++) {
@@ -51,47 +50,50 @@ var parseFile = function(text) {
     }
   }
   
-  // do another pass-through for the imgData array 
-  // (truncate to 0-255 for Uint8 array; maxWidth is 8196, so avg)
-  /*
-  for (var i = 0; i < ds.data.length; i = i + 2) {
-    if (i + 1 >= ds.data.length) {
-      ds.imgData[(i / 2) * 4] = Math.floor(255 * (ds.data[i][2] / ds.maxVal));
-    } else {
-      ds.imgData[(i / 2) * 4] = 
-        (
-          Math.floor(255 * (ds.data[i][2] / ds.maxVal)) + 
-          Math.floor(255 * (ds.data[i+1][2] / ds.maxVal))
-        ) / 2;
-    }
-    
-    // set alpha to 1 (necessary? could handle this in shader)
-    ds.imgData[(i / 2) * 4 + 3] = 255;
-  }
-  */
-  
+  // create the pixels necessary to create an image for the overview
   ds.bmpData = [];
   for (var i = 0; i < ds.numWindow; i++) {
     ds.bmpData.push([]);
   }
   
+  // be smart about the largest texture size.  try to get as much detail as possible
+  var maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
   
-  for (var i = 0; i < ds.data.length; i = i + 1) {
-    var imgIndex = ((i % ds.numWindow) * ds.numWindow) + Math.floor(i / ds.numWindow);
-    //var imgIndex = i;
-    
-    if (imgIndex >= ds.numWindow * Math.min(8192, ds.numPos)) 
-      continue;
-    
-    ds.imgData[imgIndex * 4] = Math.floor(255 * (ds.data[i][2] / ds.maxVal));
-    ds.imgData[imgIndex * 4 + 1] = 0;
-    ds.imgData[imgIndex * 4 + 2] = 0;
-    ds.imgData[imgIndex * 4 + 3] = 255;
-    
-    ds.bmpData[i % ds.numWindow][Math.floor(i / ds.numWindow)] = 
-      [Math.floor(255 * (ds.data[i][2] / ds.maxVal)), 0, 0];
-    
-  }  
+  // do the naive thing if we're smaller than the max texture size
+  if (ds.numPos < maxTexSize) {  
+    for (var i = 0; i < ds.data.length; i = i + 1) {
+      ds.bmpData[i % ds.numWindow][Math.floor(i / ds.numWindow)] = 
+        [Math.floor(255 * (ds.data[i][2] / ds.maxVal)), 0, 0];
+    }  
+  } else {
+    var numPixelsToCollapse = Math.ceil(ds.numPos / maxTexSize);
+    var texWidth = Math.ceil(ds.numPos / numPixelsToCollapse);
+    for (var y = 0; y < ds.numWindow; y++) {
+      for (var x = 0; x < texWidth; x++) {
+        // get corresponding vertices from ds.data
+        var numPixels = numPixelsToCollapse;
+        var sumPixels = 0;
+        
+        for (var n = 0; n < numPixelsToCollapse; n++) {
+          var curIndex = ((x * numPixelsToCollapse) + n) * ds.numWindow + y;
+          
+          if (curIndex < ds.numPos) {
+            sumPixels += ds.data[curIndex][2];
+          } else {
+            numPixels--;
+          }
+        }
+        
+        if (numPixels <= 0) {
+          ds.bmpData[y][x] = [0, 0, 0];
+          continue;
+        }
+          
+        sumPixels = Math.floor(255 * (sumPixels / numPixels / ds.maxVal));
+        ds.bmpData[y][x] = [sumPixels, 0, 0];
+      }
+    }
+  }
   
   // compile the GPU data buffer
   ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
@@ -103,34 +105,14 @@ var parseFile = function(text) {
   debugImg();  
 };
 
+// construct a bitmap image using `bitmap.js`.
+// used as a debugging tool, but also creates the bitmap to load into the texture
 var debugImg = function() {
   var img = new Image();
   
-  // would be nice to do the below, but it blows the stack.  do it iteratively instead
-  // var base64data = btoa(String.fromCharCode.apply(null, ds.imgData));
-  /*var base64data = "";
-  for (var i = 0; i < ds.imgData.length; i++) {
-    base64data += String.fromCharCode(ds.imgData[i]);
-  }
-  
-  base64data = btoa(base64data);
-  img.src = "data:image/png;base64," + base64data;*/
-  
-  // depends on imeplementation 
-  // (see https://developer.mozilla.org/en-US/docs/Web/API/URL.createObjectURL)
-  
-  /*
-  var thisURL = window.URL || window.webkitURL;
-  
-  var blob = new Blob([generateBitmapDataURL(ds.bmpData)], {'type': 'image/bmp'});
-  img.src = thisURL.createObjectURL(blob);*/
   img.src = generateBitmapDataURL(ds.bmpData);
   img.width = 800;
   img.id = "bmpimg";
-  /*img.onload = function(e) { 
-    thisURL.revokeObjectURL(this.src);
-  };*/
-  
   document.getElementById("img-container").appendChild(img);
 };
 
@@ -191,7 +173,6 @@ var createTextures = function() {
   
   // gotta make the texture from 'scratch'
   textures['full'] = new GL.Texture(pot_width, pot_height, mipmapOpts);
-  //gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
   
   var width = Math.min(8192, ds.numPos);
   var height = Math.min(8192, ds.numWindow);
@@ -200,15 +181,6 @@ var createTextures = function() {
   
   // try rendering from an image
   textures['full'] = GL.Texture.fromImage(document.getElementById("bmpimg"), mipmapOpts);
-  
-  /*
-  
-//  gl.bindTexture(gl.TEXTURE_2D, textures.full.id);
-  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, Math.min(8192, ds.numPos), ds.numWindow, textures['full'].format, textures['full'].type, ds.imgData);
-  //gl.texImage2D(gl.TEXTURE_2D, 0, textures.full.format, Math.min(8192, ds.numPos), 
-  //  ds.numWindow, 0, textures.full.format, textures.full.type, ds.imgData);
-  gl.generateMipmap(gl.TEXTURE_2D);
-  */
   
   // clean up state
   gl.bindTexture(gl.TEXTURE_2D, null);
@@ -236,22 +208,11 @@ gl.ondraw = function() {
   plane.vertices[0][1] = y_min;
   plane.vertices[1][1] = y_min;
   
-  /*
-  plane.vertices[0][1] = 0;
-  plane.vertices[1][1] = 0;
-  plane.vertices[1][0] = textures.full.width / textures.full.height;
-  plane.vertices[3][0] = textures.full.width / textures.full.height;*/
-  
   plane.compile();
-  
-  gl.disable(gl.DEPTH_TEST);
-  gl.enable(gl.BLEND);
-  
   
   gl.enable(gl.DEPTH_TEST);
   gl.disable(gl.BLEND);
   
-
   gl.pushMatrix();
   gl.matrixMode(gl.MODELVIEW);
   setZoomPan();
