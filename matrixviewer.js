@@ -104,7 +104,7 @@ var parseFile = function(text) {
 };
 
 var debugImg = function() {
-  var img = document.createElement("img");
+  var img = new Image();
   
   // would be nice to do the below, but it blows the stack.  do it iteratively instead
   // var base64data = btoa(String.fromCharCode.apply(null, ds.imgData));
@@ -125,7 +125,8 @@ var debugImg = function() {
   var blob = new Blob([generateBitmapDataURL(ds.bmpData)], {'type': 'image/bmp'});
   img.src = thisURL.createObjectURL(blob);*/
   img.src = generateBitmapDataURL(ds.bmpData);
-  img.height = ds.numWindow;
+  img.width = 800;
+  img.id = "bmpimg";
   /*img.onload = function(e) { 
     thisURL.revokeObjectURL(this.src);
   };*/
@@ -151,12 +152,36 @@ var setZoomPan = function() {
   gl.translate(offset[0], offset[1], 0);
 };
 
+var debugTexture = function(tex, x, y, w, h, nodebug) {
+  // Be a little lenient with texture, allow passing in GL.Texture (lightgl).
+  if (Object.prototype.toString.call(tex).indexOf("WebGLTexture") == -1)
+    tex = tex.id;
+
+  w = w || 2;
+  h = h || 2;
+  ds.fbo = ds.fbo || gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, ds.fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  
+  var pixels = new Uint8Array(w * h * 4);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) == gl.FRAMEBUFFER_COMPLETE) {
+    gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    if (!nodebug) {
+      console.log("Reading from texture coords (" + x + ", " + y + ") to (" + (x+w) + ", " + (y+h) + "):");
+      console.log(pixels);
+    }
+  }
+  
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return pixels;
+};
+
 var texturesCreated = false;
 var createTextures = function() {
 
   var mipmapOpts = {
     magFilter: gl.LINEAR,
-    minFilter: gl.LINEAR_MIPMAP_NEAREST,
+    minFilter: gl.NEAREST,
     format:    gl.RGBA,
     type:      gl.UNSIGNED_BYTE
   };
@@ -166,9 +191,24 @@ var createTextures = function() {
   
   // gotta make the texture from 'scratch'
   textures['full'] = new GL.Texture(pot_width, pot_height, mipmapOpts);
+  //gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
   
+  var width = Math.min(8192, ds.numPos);
+  var height = Math.min(8192, ds.numWindow);
+  console.log("texture height: " + pot_height + ", width: " + pot_width);
+  console.log("renderTo: height: " + height + ", width: " + width);
+  
+  // try rendering from an image
+  textures['full'] = GL.Texture.fromImage(document.getElementById("bmpimg"), mipmapOpts);
+  
+  /*
+  
+//  gl.bindTexture(gl.TEXTURE_2D, textures.full.id);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, Math.min(8192, ds.numPos), ds.numWindow, textures['full'].format, textures['full'].type, ds.imgData);
+  //gl.texImage2D(gl.TEXTURE_2D, 0, textures.full.format, Math.min(8192, ds.numPos), 
+  //  ds.numWindow, 0, textures.full.format, textures.full.type, ds.imgData);
   gl.generateMipmap(gl.TEXTURE_2D);
+  */
   
   // clean up state
   gl.bindTexture(gl.TEXTURE_2D, null);
@@ -191,14 +231,16 @@ gl.ondraw = function() {
   
   // fix plane to the dimensions of the large ds.imgData texture
   plane = new GL.Mesh.plane();
-  /* y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
-  plane.vertices[0][1] = y_min;
-  plane.vertices[1][1] = y_min; */
   
+  y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
+  plane.vertices[0][1] = y_min;
+  plane.vertices[1][1] = y_min;
+  
+  /*
   plane.vertices[0][1] = 0;
   plane.vertices[1][1] = 0;
   plane.vertices[1][0] = textures.full.width / textures.full.height;
-  plane.vertices[3][0] = textures.full.width / textures.full.height;
+  plane.vertices[3][0] = textures.full.width / textures.full.height;*/
   
   plane.compile();
   
@@ -225,7 +267,8 @@ gl.ondraw = function() {
   
   textures['full'].bind(0);
   shaders['overview'].uniforms({
-    texture: 0
+    texture: 0,
+    minVal: y_min
   }).draw(plane);
   textures['full'].unbind(0);  
 }
@@ -266,7 +309,7 @@ function main() {
   loadShaderFromFiles("points");
   loadShaderFromFiles("overview");
   
-  $.get("readBreadthAll.csv", parseFile);
+  $.get("readBreadthMed.csv", parseFile);
   
   gl.ondraw();
 };
