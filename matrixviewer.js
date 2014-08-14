@@ -70,15 +70,27 @@ var parseFile = function(text) {
   }
   */
   
+  ds.bmpData = [];
+  for (var i = 0; i < ds.numWindow; i++) {
+    ds.bmpData.push([]);
+  }
+  
+  
   for (var i = 0; i < ds.data.length; i = i + 1) {
-    //var imgIndex = ((i % ds.numWindow) * ds.numWindow) + Math.floor(i / ds.numWindow);
-    var imgIndex = i;
+    var imgIndex = ((i % ds.numWindow) * ds.numWindow) + Math.floor(i / ds.numWindow);
+    //var imgIndex = i;
     
     if (imgIndex >= ds.numWindow * Math.min(8192, ds.numPos)) 
       continue;
     
     ds.imgData[imgIndex * 4] = Math.floor(255 * (ds.data[i][2] / ds.maxVal));
+    ds.imgData[imgIndex * 4 + 1] = 0;
+    ds.imgData[imgIndex * 4 + 2] = 0;
     ds.imgData[imgIndex * 4 + 3] = 255;
+    
+    ds.bmpData[i % ds.numWindow][Math.floor(i / ds.numWindow)] = 
+      [Math.floor(255 * (ds.data[i][2] / ds.maxVal)), 0, 0];
+    
   }  
   
   // compile the GPU data buffer
@@ -106,14 +118,17 @@ var debugImg = function() {
   
   // depends on imeplementation 
   // (see https://developer.mozilla.org/en-US/docs/Web/API/URL.createObjectURL)
+  
+  /*
   var thisURL = window.URL || window.webkitURL;
   
-  var blob = new Blob([ds.imgData], {'type': 'image/bmp'});
-  img.src = thisURL.createObjectURL(blob);
+  var blob = new Blob([generateBitmapDataURL(ds.bmpData)], {'type': 'image/bmp'});
+  img.src = thisURL.createObjectURL(blob);*/
+  img.src = generateBitmapDataURL(ds.bmpData);
   img.height = ds.numWindow;
-  img.onload = function(e) { 
+  /*img.onload = function(e) { 
     thisURL.revokeObjectURL(this.src);
-  };
+  };*/
   
   document.getElementById("img-container").appendChild(img);
 };
@@ -251,7 +266,7 @@ function main() {
   loadShaderFromFiles("points");
   loadShaderFromFiles("overview");
   
-  $.get("readBreadth.csv", parseFile);
+  $.get("readBreadthAll.csv", parseFile);
   
   gl.ondraw();
 };
