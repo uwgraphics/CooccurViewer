@@ -77,7 +77,7 @@ var parseFile = function(text) {
         for (var n = 0; n < numPixelsToCollapse; n++) {
           var curIndex = ((x * numPixelsToCollapse) + n) * ds.numWindow + y;
           
-          if (curIndex < ds.numPos) {
+          if (curIndex < ds.numPos * ds.numWindow) {
             sumPixels += ds.data[curIndex][2];
           } else {
             numPixels--;
@@ -89,8 +89,8 @@ var parseFile = function(text) {
           continue;
         }
           
-        sumPixels = Math.floor(255 * (sumPixels / numPixels / ds.maxVal));
-        ds.bmpData[y][x] = [sumPixels, 0, 0];
+        var val = Math.floor(255 * ((sumPixels / numPixels) / ds.maxVal));
+        ds.bmpData[y][x] = [val, 0, 0];
       }
     }
   }
@@ -270,7 +270,7 @@ function main() {
   loadShaderFromFiles("points");
   loadShaderFromFiles("overview");
   
-  $.get("readBreadthMed.csv", parseFile);
+  $.get("readBreadthAll.csv", parseFile);
   
   gl.ondraw();
 };
