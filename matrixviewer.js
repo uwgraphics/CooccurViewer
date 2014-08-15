@@ -7,7 +7,7 @@ var timer = null;
 
 var shaders = [];
 var textures = [];
-var plane;
+var plane, indicator;
 
 var ds = {
   data: [],
@@ -158,32 +158,40 @@ var debugTexture = function(tex, x, y, w, h, nodebug) {
   return pixels;
 };
 
+// each x is worth this much in numPos
+var transformOverivewX = function(x) {
+  return x * (ds.numPos / gl.canvas.width);
+};
+
+var untransformX = function(x) {
+  return x * (gl.canvas.width / ds.numPos);
+};
+
 var texturesCreated = false;
 var createTextures = function() {
-
-  var mipmapOpts = {
+  var defaultOpts = {
     magFilter: gl.LINEAR,
     minFilter: gl.NEAREST,
     format:    gl.RGBA,
     type:      gl.UNSIGNED_BYTE
   };
   
-  var pot_width  = Math.min(8192, Math.pow(2, Math.ceil(Math.log(ds.numPos) / Math.log(2))));
-  var pot_height = Math.min(8192, Math.pow(2, Math.ceil(Math.log(ds.numWindow) / Math.log(2))));
-  
-  // gotta make the texture from 'scratch'
-  textures['full'] = new GL.Texture(pot_width, pot_height, mipmapOpts);
-  
-  var width = Math.min(8192, ds.numPos);
-  var height = Math.min(8192, ds.numWindow);
-  console.log("texture height: " + pot_height + ", width: " + pot_width);
-  console.log("renderTo: height: " + height + ", width: " + width);
-  
   // try rendering from an image
-  textures['full'] = GL.Texture.fromImage(document.getElementById("bmpimg"), mipmapOpts);
+  textures['full'] = GL.Texture.fromImage(document.getElementById("bmpimg"), defaultOpts);
   
   // clean up state
   gl.bindTexture(gl.TEXTURE_2D, null);
+  
+  texturesCreated = true;
+  
+  // fix plane to the dimensions of the large ds.imgData texture
+  plane = new GL.Mesh.plane();
+  
+  y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
+  plane.vertices[0][1] = y_min;
+  plane.vertices[1][1] = y_min;
+  
+  plane.compile();
 };
 
 gl.ondraw = function() {
@@ -200,15 +208,6 @@ gl.ondraw = function() {
   
   gl.clearColor(1.0, 1.0, 1.0, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  
-  // fix plane to the dimensions of the large ds.imgData texture
-  plane = new GL.Mesh.plane();
-  
-  y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
-  plane.vertices[0][1] = y_min;
-  plane.vertices[1][1] = y_min;
-  
-  plane.compile();
   
   gl.enable(gl.DEPTH_TEST);
   gl.disable(gl.BLEND);
@@ -242,6 +241,45 @@ var resizeCanvas = function() {
   gl.matrixMode(gl.MODELVIEW);
 }
 
+// ## Handlers for mouse-interaction
+// Handle panning the canvas.
+var panX, panY;
+var buttons = {};
+gl.onmousedown = function(e) {
+  buttons[e.which] = true;
+  panX = e.x;
+  panY = gl.canvas.height - e.y;
+  
+  screenOffset[0] = -transformOverivewX(panX);
+  gl.ondraw();
+};
+
+
+gl.onmousemove = function(e) {
+  if (drags(e)) {
+    //screenOffset[0] += e.x - panX;
+    //screenOffset[1] += (gl.canvas.height - e.y) - panY;
+    
+    panX = e.x;
+    panY = gl.canvas.height - e.y;
+    
+    screenOffset[0] = -transformOverivewX(panX);
+    gl.ondraw();
+  }
+};
+
+gl.onmouseup = function(e) {
+  buttons[e.which] = false;
+  
+  gl.ondraw();
+};
+
+var drags = function(e) {
+  for (var b in buttons) {
+    if (Object.prototype.hasOwnProperty.call(buttons, b) && buttons[b]) return true;
+  }  
+};
+
 function main() {
   gl.canvas.id = "webglcanvas";
   document.getElementById("canvas-container").appendChild(gl.canvas);
@@ -270,7 +308,7 @@ function main() {
   loadShaderFromFiles("points");
   loadShaderFromFiles("overview");
   
-  $.get("readBreadthAll.csv", parseFile);
+  $.get("readBreadthMedSmall.csv", parseFile);
   
   gl.ondraw();
 };
