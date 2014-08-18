@@ -7,7 +7,9 @@ var timer = null;
 
 var shaders = [];
 var textures = [];
-var plane, indicator;
+var overview, indicator;
+var indicatorWidth = 0;
+var indicatorHeight = 4;
 
 var ds = {
   data: [],
@@ -159,7 +161,7 @@ var debugTexture = function(tex, x, y, w, h, nodebug) {
 };
 
 // each x is worth this much in numPos
-var transformOverivewX = function(x) {
+var transformOverviewX = function(x) {
   return x * (ds.numPos / gl.canvas.width);
 };
 
@@ -179,26 +181,56 @@ var createTextures = function() {
   // try rendering from an image
   textures['full'] = GL.Texture.fromImage(document.getElementById("bmpimg"), defaultOpts);
   
+  // fix plane to the dimensions of the large ds.imgData texture
+  overview = new GL.Mesh.plane();
+  
+  y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
+  overview.vertices[0][1] = y_min;
+  overview.vertices[1][1] = y_min;
+  
+  overview.compile();
+  
+  // create the overview window indicator 
+  // (what detail are we showing from overview?)
+  indicator = new GL.Mesh.plane();
+  indicatorWidth = 2 * (gl.canvas.width / ds.numPos);
+  indicatorHeight = 4;
+  
+  // set the y positions based on the size of the overview
+  indicator.vertices[0][1] = 
+    indicator.vertices[1][1] = y_min - (2 * indicatorHeight / gl.canvas.height);
+  indicator.vertices[2][1] = indicator.vertices[3][1] = y_min;
+  
+  // update the x-coordinates of vertices, and compile
+  updateIndicator(true);
+  indicator.compile(gl.DYNAMIC_DRAW);
+  
   // clean up state
   gl.bindTexture(gl.TEXTURE_2D, null);
   
   texturesCreated = true;
+};
+
+var updateIndicator = function(setupOnly) {
+  // get the current 'x pos'
+  var xpos = -screenOffset[0];
+  indicator.vertices[0][0] = indicator.vertices[2][0] = 2 * (xpos / ds.numPos) - 1;
+  indicator.vertices[1][0] = indicator.vertices[3][0] = indicator.vertices[0][0] + indicatorWidth;
   
-  // fix plane to the dimensions of the large ds.imgData texture
-  plane = new GL.Mesh.plane();
+  // try to avoid recompiling; we already told WebGL the vertex buffer of indicator
+  // was `gl.DYNAMIC_DRAW`, now let's just update the buffer.  
+  if (!setupOnly) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, indicator.vertexBuffers.gl_Vertex.buffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array([].concat.apply([], indicator.vertices)));
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  }
   
-  y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
-  plane.vertices[0][1] = y_min;
-  plane.vertices[1][1] = y_min;
-  
-  plane.compile();
+  //indicator.compile(gl.STREAM_DRAW);  
 };
 
 gl.ondraw = function() {
-  if (!dataReady || !shaders['points'] || !shaders['overview']) {
-    //if (!timer) {
-      timer = setTimeout("gl.ondraw()", 300);
-    //}
+  if (!dataReady || !shaders['points'] || !shaders['overview'] || !shaders['solid']) {
+    timer = setTimeout("gl.ondraw()", 300);
     return;
   }
   
@@ -206,15 +238,19 @@ gl.ondraw = function() {
     createTextures();
   }
   
+  // based on screenOffset, update the overview indicator
+  updateIndicator();
+  
   gl.clearColor(1.0, 1.0, 1.0, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   
   gl.enable(gl.DEPTH_TEST);
   gl.disable(gl.BLEND);
   
+  // get ready to draw the full-detailed matrix diagonal
   gl.pushMatrix();
   gl.matrixMode(gl.MODELVIEW);
-  setZoomPan();
+  setZoomPan(); // unused right now...
   
   var vertBuffer = [];
   vertBuffer['position'] = ds.buf;
@@ -225,12 +261,18 @@ gl.ondraw = function() {
   
   gl.popMatrix();
   
+  // draw the overview
   textures['full'].bind(0);
   shaders['overview'].uniforms({
     texture: 0,
     minVal: y_min
-  }).draw(plane);
+  }).draw(overview);
   textures['full'].unbind(0);  
+  
+  // draw the indicator
+  shaders['solid'].uniforms({
+    vColor: [173/255, 255/255, 47/255, 1]
+  }).draw(indicator);
 }
 
 var resizeCanvas = function() {
@@ -239,7 +281,20 @@ var resizeCanvas = function() {
   gl.loadIdentity();
   gl.ortho(0, gl.canvas.width, 0, gl.canvas.height, -100, 100);
   gl.matrixMode(gl.MODELVIEW);
-}
+};
+
+var setCleanXInput = function(x) {
+  // the minimum position that the slider can take
+  var halfIndicator = gl.canvas.width / ds.numPos * gl.canvas.width / 2;
+  
+  // always translate x so that it's moving the 'middle' of the slider
+  x -= halfIndicator;
+  
+  // set the screenOffset with the modified x
+  screenOffset[0] = -transformOverviewX(
+    Math.max(0, 
+      Math.min(gl.canvas.width - 2 * halfIndicator, x)));
+};
 
 // ## Handlers for mouse-interaction
 // Handle panning the canvas.
@@ -250,7 +305,7 @@ gl.onmousedown = function(e) {
   panX = e.x;
   panY = gl.canvas.height - e.y;
   
-  screenOffset[0] = -transformOverivewX(panX);
+  setCleanXInput(panX);
   gl.ondraw();
 };
 
@@ -263,15 +318,13 @@ gl.onmousemove = function(e) {
     panX = e.x;
     panY = gl.canvas.height - e.y;
     
-    screenOffset[0] = -transformOverivewX(panX);
+    setCleanXInput(panX);
     gl.ondraw();
   }
 };
 
 gl.onmouseup = function(e) {
   buttons[e.which] = false;
-  
-  gl.ondraw();
 };
 
 var drags = function(e) {
@@ -307,8 +360,9 @@ function main() {
   
   loadShaderFromFiles("points");
   loadShaderFromFiles("overview");
+  loadShaderFromFiles("solid");
   
-  $.get("readBreadthMedSmall.csv", parseFile);
+  $.get("readBreadthAll.csv", parseFile);
   
   gl.ondraw();
 };
