@@ -36,22 +36,26 @@ var parseFile = function(text) {
     lines[i] = lines[i].split(delimiter);
   }
   
-  ds.data = [];
   ds.numPos = lines.length;
   ds.numWindow = lines[0].length;
+  ds.data = new Float32Array(ds.numPos * ds.numWindow * 3);
   
-  for (var i = 0; i < lines.length; i++) {
+  for (var i = 0; i < ds.numPos; i++) {
     for (var j = 0; j < ds.numWindow; j++) {
       var curValue = +lines[i][j];
       
       // x,y position and z is the value
-      var thisItem = [i, j, curValue];
+      //var thisItem = [i, j, curValue];
+      var curIndex = (i * ds.numWindow + j) * 3
+      ds.data[curIndex] = i;
+      ds.data[curIndex + 1] = j;
+      ds.data[curIndex + 2] = curValue;
       
       // keep track of the largest value we've seen so far
       ds.maxVal = Math.max(ds.maxVal, curValue);
       
       // push the point to the data stack
-      ds.data.push(thisItem);
+      //ds.data.push(thisItem);
     }
   }
   console.timeEnd("chunking data");
@@ -67,11 +71,13 @@ var parseFile = function(text) {
   var maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
   
   // do the naive thing if we're smaller than the max texture size
+  
   if (ds.numPos < maxTexSize) {  
-    for (var i = 0; i < ds.data.length; i = i + 1) {
-      ds.bmpData[i % ds.numWindow][Math.floor(i / ds.numWindow)] = 
-        [Math.floor(255 * (ds.data[i][2] / ds.maxVal)), 0, 0];
-    }  
+    for (var i = 0; i < ds.numPos; i++) {
+      for (var j = 0; j < ds.numWindow; j++) {
+        ds.bmpData[j][i] = [(ds.data[(i * ds.numWindow + j) * 3 + 2] / ds.maxVal) * 255, 0, 0];
+      }
+    }    
   } else {
     var numPixelsToCollapse = Math.ceil(ds.numPos / maxTexSize);
     var texWidth = Math.ceil(ds.numPos / numPixelsToCollapse);
@@ -85,7 +91,7 @@ var parseFile = function(text) {
           var curIndex = ((x * numPixelsToCollapse) + n) * ds.numWindow + y;
           
           if (curIndex < ds.numPos * ds.numWindow) {
-            sumPixels += ds.data[curIndex][2];
+            sumPixels += ds.data[curIndex * 3 + 2];
           } else {
             numPixels--;
           }
@@ -107,8 +113,14 @@ var parseFile = function(text) {
   
   // compile the GPU data buffer
   ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
-  ds.buf.data = ds.data;
-  ds.buf.compile(gl.STATIC_DRAW);
+  ds.buf.buffer = gl.createBuffer();
+  ds.buf.buffer.length = ds.numPos * ds.numWindow * 3;
+  ds.buf.buffer.spacing = 3;
+  
+  gl.bindBuffer(ds.buf.target, ds.buf.buffer);
+  gl.bufferData(ds.buf.target, ds.data, gl.STATIC_DRAW);
+  
+  // ds.buf.compile(gl.STATIC_DRAW);
   
   console.timeEnd("sending data to GPU");
   
@@ -197,7 +209,8 @@ var createTextures = function() {
   // fix plane to the dimensions of the large ds.imgData texture
   overview = new GL.Mesh.plane();
   
-  y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
+  y_min = 1 - ((ds.numWindow / ds.numPos) * 2);
+  //y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
   overview.vertices[0][1] = y_min;
   overview.vertices[1][1] = y_min;
   
@@ -379,8 +392,8 @@ function main() {
   loadShaderFromFiles("overview");
   loadShaderFromFiles("solid");
   
-  // $.get("readBreadthAll.csv", parseFile);
-  $.get("conjProbSmall.csv", parseFile);
+  $.get("readBreadthAll.csv", parseFile);
+  // $.get("conjProb.csv", parseFile);
   
   gl.ondraw();
 };
