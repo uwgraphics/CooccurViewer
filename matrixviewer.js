@@ -1,4 +1,4 @@
-var gl = GL.create();
+var gl = GL.create({width: 800, height: 800});
 
 window.onload = main;
 
@@ -25,8 +25,11 @@ var scale = 1;
 var offset = [0, 0];
 
 var parseFile = function(text) {
+  console.time("parsing file");
   dataReady = false;
   
+  
+  console.time("chunking data");
   var delimiter = ",";
   var lines = text.trim("\r").split("\n");
   for (var i = 0; i < lines.length; i++) {
@@ -51,7 +54,9 @@ var parseFile = function(text) {
       ds.data.push(thisItem);
     }
   }
+  console.timeEnd("chunking data");
   
+  console.time("constructing bmpData");
   // create the pixels necessary to create an image for the overview
   ds.bmpData = [];
   for (var i = 0; i < ds.numWindow; i++) {
@@ -96,15 +101,23 @@ var parseFile = function(text) {
       }
     }
   }
+  console.timeEnd("constructing bmpData");
+  
+  console.time("sending data to GPU");
   
   // compile the GPU data buffer
   ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
   ds.buf.data = ds.data;
   ds.buf.compile(gl.STATIC_DRAW);
   
-  dataReady = true;
+  console.timeEnd("sending data to GPU");
   
+  dataReady = true;
+  console.timeEnd("parsing file");
+  
+  console.time("constructing bitmap");
   debugImg();  
+  console.timeEnd("constructing bitmap");
 };
 
 // construct a bitmap image using `bitmap.js`.
@@ -238,6 +251,8 @@ gl.ondraw = function() {
     createTextures();
   }
   
+  console.time("gl.ondraw()");
+  
   // based on screenOffset, update the overview indicator
   updateIndicator();
   
@@ -273,6 +288,8 @@ gl.ondraw = function() {
   shaders['solid'].uniforms({
     vColor: [173/255, 255/255, 47/255, 1]
   }).draw(indicator);
+  
+  console.timeEnd("gl.ondraw()");
 }
 
 var resizeCanvas = function() {
@@ -362,7 +379,8 @@ function main() {
   loadShaderFromFiles("overview");
   loadShaderFromFiles("solid");
   
-  $.get("readBreadthAll.csv", parseFile);
+  // $.get("readBreadthAll.csv", parseFile);
+  $.get("conjProbSmall.csv", parseFile);
   
   gl.ondraw();
 };
