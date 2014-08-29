@@ -392,8 +392,11 @@ function main() {
   loadShaderFromFiles("overview");
   loadShaderFromFiles("solid");
   
-  $.get("readBreadthAll.csv", parseFile);
-  // $.get("conjProb.csv", parseFile);
+  if (location.search == "?reads") {
+    $.get("readBreadthAll.csv", parseFile);
+  } else {
+    $.get("conjProb.csv", parseFile);
+  }
   
   gl.ondraw();
 };
