@@ -156,9 +156,19 @@ var setInitBounds = function() {
 
 var setZoomPan = function() {
   gl.loadIdentity();
-  gl.translate(screenOffset[0], screenOffset[1], 0);
-  gl.scale(scale, scale, 1);
-  gl.translate(offset[0], offset[1], 0);
+  // gl.rotate(-45, 0, 0, 1);
+  if ($("#dodiagonal").prop('checked')) {
+    // give an upper margin of 100 pixels
+    var topMargin = (ds.numWindow / ds.numPos) * gl.canvas.width + indicatorHeight + 1;
+    gl.translate(0, gl.canvas.height - topMargin - 2*screenOffset[0], 0);
+    gl.translate(screenOffset[0], screenOffset[0], 0);
+    gl.scale(scale, -scale, 1);
+    gl.translate(offset[0], offset[1], 0);
+  } else {
+    gl.translate(screenOffset[0], screenOffset[1], 0);
+    gl.scale(scale, scale, 1);
+    gl.translate(offset[0], offset[1], 0);
+  }
 };
 
 var debugTexture = function(tex, x, y, w, h, nodebug) {
@@ -219,8 +229,7 @@ var createTextures = function() {
   // create the overview window indicator 
   // (what detail are we showing from overview?)
   indicator = new GL.Mesh.plane();
-  indicatorWidth = 2 * (gl.canvas.width / ds.numPos);
-  indicatorHeight = 4;
+  indicatorHeight = 7;
   
   // set the y positions based on the size of the overview
   indicator.vertices[0][1] = 
@@ -238,6 +247,8 @@ var createTextures = function() {
 };
 
 var updateIndicator = function(setupOnly) {
+  indicatorWidth = $("#dodiagonal").prop('checked') ? 2 * (gl.canvas.height - indicatorHeight) / ds.numPos : 2 * (gl.canvas.width / ds.numPos);
+  
   // get the current 'x pos'
   var xpos = -screenOffset[0];
   indicator.vertices[0][0] = indicator.vertices[2][0] = 2 * (xpos / ds.numPos) - 1;
@@ -255,7 +266,9 @@ var updateIndicator = function(setupOnly) {
 };
 
 gl.ondraw = function() {
-  if (!dataReady || !shaders['points'] || !shaders['overview'] || !shaders['solid']) {
+  var ptShader = $("#dodiagonal").prop('checked') ? shaders['pointsDiag'] : shaders['points'];
+
+  if (!dataReady || !ptShader || !shaders['overview'] || !shaders['solid']) {
     timer = setTimeout("gl.ondraw()", 300);
     return;
   }
@@ -282,8 +295,9 @@ gl.ondraw = function() {
   
   var vertBuffer = [];
   vertBuffer['position'] = ds.buf;
-  shaders['points'].uniforms({
+  ptShader.uniforms({
     pointSize: 1,
+    windowSize: ds.numWindow,
     maxVal: ds.maxVal
   }).drawBuffers(vertBuffer, null, gl.POINTS);
   
@@ -315,15 +329,21 @@ var resizeCanvas = function() {
 
 var setCleanXInput = function(x) {
   // the minimum position that the slider can take
-  var halfIndicator = gl.canvas.width / ds.numPos * gl.canvas.width / 2;
+  var halfIndicator = indicatorWidth / 2 * gl.canvas.width / 2;
   
   // always translate x so that it's moving the 'middle' of the slider
   x -= halfIndicator;
   
   // set the screenOffset with the modified x
-  screenOffset[0] = -transformOverviewX(
-    Math.max(0, 
-      Math.min(gl.canvas.width - 2 * halfIndicator, x)));
+  if (!$("#dodiagonal").prop('checked')) {
+    screenOffset[0] = -transformOverviewX(
+      Math.max(0, 
+        Math.min(gl.canvas.width - 2 * halfIndicator, x)));
+  } else {
+    screenOffset[0] = -transformOverviewX(
+      Math.max(0, 
+        Math.min(gl.canvas.width, x)));
+  }
 };
 
 // ## Handlers for mouse-interaction
@@ -388,7 +408,10 @@ function main() {
     });
   };
   
+  $("#dodiagonal").change(gl.ondraw);
+  
   loadShaderFromFiles("points");
+  loadShaderFromFiles("pointsDiag", "pointsMatrix.vs", "points.fs");
   loadShaderFromFiles("overview");
   loadShaderFromFiles("solid");
   
