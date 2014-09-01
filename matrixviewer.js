@@ -7,7 +7,7 @@ var timer = null;
 
 var shaders = [];
 var textures = [];
-var overview, indicator;
+var overview, indicator, indicatorBackground;
 var indicatorWidth = 0;
 var indicatorHeight = 4;
 
@@ -240,6 +240,18 @@ var createTextures = function() {
   updateIndicator(true);
   indicator.compile(gl.DYNAMIC_DRAW);
   
+  indicatorBackground = new GL.Mesh.plane();
+  indicatorBackground.vertices[0][1] = 
+    indicatorBackground.vertices[1][1] = indicator.vertices[0][1];
+  indicatorBackground.vertices[2][1] = 
+    indicatorBackground.vertices[3][1] = indicator.vertices[2][1];
+    
+  // set the z-value of the indicator background so it is drawn behind the indicator
+  for (var i = 0; i < 4; i++) {
+    indicatorBackground.vertices[i][2] = 0.0;
+  }
+  indicatorBackground.compile(gl.STATIC_DRAW);
+  
   // clean up state
   gl.bindTexture(gl.TEXTURE_2D, null);
   
@@ -282,7 +294,7 @@ gl.ondraw = function() {
   // based on screenOffset, update the overview indicator
   updateIndicator();
   
-  gl.clearColor(1.0, 1.0, 1.0, 1.0);
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   
   gl.enable(gl.DEPTH_TEST);
@@ -313,8 +325,13 @@ gl.ondraw = function() {
   
   // draw the indicator
   shaders['solid'].uniforms({
-    vColor: [173/255, 255/255, 47/255, 1]
+    vColor: [133/255, 200/255, 35/255, 1]
   }).draw(indicator);
+  
+  // draw the indicator background
+  shaders['solid'].uniforms({
+    vColor: [0.9, 0.9, 0.9, 1]
+  }).draw(indicatorBackground);
   
   console.timeEnd("gl.ondraw()");
 }
