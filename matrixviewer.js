@@ -11,6 +11,9 @@ var overview, indicator, indicatorBackground;
 var indicatorWidth = 0;
 var indicatorHeight = 4;
 
+var colormapTexture;
+var colormapWidth = 0;
+
 var ds = {
   data: [],
   buf: 0,
@@ -143,6 +146,36 @@ var debugImg = function() {
   document.getElementById("img-container").appendChild(img);
 };
 
+// construct a Uint8 buffer for all hex-encoded colors given a specified
+// colorbrewer ramp.
+var colorbrewerRampToBuffer = function(colors, width) {
+  var arr = new Uint8Array(width * width * 4);
+  
+  colors.forEach(function(color, n) {
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color);
+    arr[n * 4]     = parseInt(result[1], 16);
+    arr[n * 4 + 1] = parseInt(result[2], 16);
+    arr[n * 4 + 2] = parseInt(result[3], 16);
+    arr[n * 4 + 3] = 255;
+  });
+  
+  return arr;
+};
+
+// creates a texture with the specified colorbrewer ramp
+var colorbrewerRampToTexture = function(colors) {
+  var w = Math.ceil(Math.sqrt(colors.length));
+  colormapTexture = new GL.Texture(w, w, {filter: gl.NEAREST, wrap: gl.CLAMP_TO_EDGE});
+  
+  var colorArray = colorbrewerRampToBuffer(colors, w);  
+  
+  colormapTexture.bind(0);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, w, 0, gl.RGBA, gl.UNSIGNED_BYTE, colorArray);
+  colormapTexture.unbind(0);
+
+  colormapWidth = w;
+};
+
 var setInitBounds = function() {
   var b = [[0, 344], [0, 301]];
   
@@ -252,6 +285,9 @@ var createTextures = function() {
   }
   indicatorBackground.compile(gl.STATIC_DRAW);
   
+  // create the colorbrewer ramp texture so the shader can access values
+  colorbrewerRampToTexture(colorbrewer.OrRd['9']);
+  
   // clean up state
   gl.bindTexture(gl.TEXTURE_2D, null);
   
@@ -280,7 +316,9 @@ var updateIndicator = function(setupOnly) {
 gl.ondraw = function() {
   var ptShader = $("#dodiagonal").prop('checked') ? shaders['pointsDiag'] : shaders['points'];
 
-  if (!dataReady || !ptShader || !shaders['overview'] || !shaders['solid']) {
+  if (!dataReady || !ptShader || !shaders['overview'] || 
+      !shaders['solid'] || !shaders['cb_points']) 
+  {
     timer = setTimeout("gl.ondraw()", 300);
     return;
   }
@@ -307,11 +345,24 @@ gl.ondraw = function() {
   
   var vertBuffer = [];
   vertBuffer['position'] = ds.buf;
-  ptShader.uniforms({
-    pointSize: 1,
-    windowSize: ds.numWindow,
-    maxVal: ds.maxVal
-  }).drawBuffers(vertBuffer, null, gl.POINTS);
+  if ($("#usecolorbrewer").prop('checked')) {
+    colormapTexture.bind(0);
+    shaders['cb_points'].uniforms({
+      pointSize: 1,
+      maxVal: ds.maxVal,
+      minVal: 0,
+      rampTexWidth: colormapWidth,
+      numSteps: 9,
+      colorRamp: 0
+    }).drawBuffers(vertBuffer, null, gl.POINTS);
+    colormapTexture.unbind(0);
+  } else {
+    ptShader.uniforms({
+      pointSize: 1,
+      windowSize: ds.numWindow,
+      maxVal: ds.maxVal
+    }).drawBuffers(vertBuffer, null, gl.POINTS);
+  }
   
   gl.popMatrix();
   
@@ -426,8 +477,10 @@ function main() {
   };
   
   $("#dodiagonal").change(gl.ondraw);
+  $("#usecolorbrewer").change(gl.ondraw);
   
   loadShaderFromFiles("points");
+  loadShaderFromFiles("cb_points", "cb_points.vs", "points.fs");
   loadShaderFromFiles("pointsDiag", "pointsMatrix.vs", "points.fs");
   loadShaderFromFiles("overview");
   loadShaderFromFiles("solid");
