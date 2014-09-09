@@ -11,6 +11,7 @@ var overview, indicator, indicatorBackground;
 var indicatorWidth = 0;
 var indicatorHeight = 4;
 
+var chosenColormap = colorbrewer.OrRd['9'];
 var colormapTexture;
 var colormapWidth = 0;
 
@@ -153,6 +154,7 @@ var colorbrewerRampToBuffer = function(colors, width) {
   
   colors.forEach(function(color, n) {
     var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color);
+    console.log("adding color " + color + " to position " + (n*4) + " to " + (n*4+3));
     arr[n * 4]     = parseInt(result[1], 16);
     arr[n * 4 + 1] = parseInt(result[2], 16);
     arr[n * 4 + 2] = parseInt(result[3], 16);
@@ -166,6 +168,10 @@ var colorbrewerRampToBuffer = function(colors, width) {
 var colorbrewerRampToTexture = function(colors) {
   var w = Math.ceil(Math.sqrt(colors.length));
   colormapTexture = new GL.Texture(w, w, {filter: gl.NEAREST, wrap: gl.CLAMP_TO_EDGE});
+  
+  // Unset variable set by lightgl.js in TEXTURE.js;
+  // see <http://code.google.com/p/chromium/issues/detail?id=125481>
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
   
   var colorArray = colorbrewerRampToBuffer(colors, w);  
   
@@ -286,7 +292,7 @@ var createTextures = function() {
   indicatorBackground.compile(gl.STATIC_DRAW);
   
   // create the colorbrewer ramp texture so the shader can access values
-  colorbrewerRampToTexture(colorbrewer.OrRd['9']);
+  colorbrewerRampToTexture(chosenColormap);
   
   // clean up state
   gl.bindTexture(gl.TEXTURE_2D, null);
@@ -352,7 +358,7 @@ gl.ondraw = function() {
       maxVal: ds.maxVal,
       minVal: 0,
       rampTexWidth: colormapWidth,
-      numSteps: 9,
+      numSteps: chosenColormap.length,
       colorRamp: 0
     }).drawBuffers(vertBuffer, null, gl.POINTS);
     colormapTexture.unbind(0);
@@ -384,6 +390,15 @@ gl.ondraw = function() {
     vColor: [0.9, 0.9, 0.9, 1]
   }).draw(indicatorBackground);
   
+  
+  /*
+  var p = new GL.Mesh.plane();
+  colormapTexture.bind(0);
+  shaders['texture'].uniforms({
+    texture: 0
+  }).draw(p);
+  colormapTexture.unbind(0);
+  */
   console.timeEnd("gl.ondraw()");
 }
 
@@ -429,10 +444,7 @@ gl.onmousedown = function(e) {
 
 
 gl.onmousemove = function(e) {
-  if (drags(e)) {
-    //screenOffset[0] += e.x - panX;
-    //screenOffset[1] += (gl.canvas.height - e.y) - panY;
-    
+  if (drags(e)) {    
     panX = e.x;
     panY = gl.canvas.height - e.y;
     
@@ -484,6 +496,9 @@ function main() {
   loadShaderFromFiles("pointsDiag", "pointsMatrix.vs", "points.fs");
   loadShaderFromFiles("overview");
   loadShaderFromFiles("solid");
+  
+  // debugging
+  loadShaderFromFiles("texture", "texture.vs", "overview.fs");
   
   if (location.search == "?reads") {
     $.get("readBreadthAll.csv", parseFile);
