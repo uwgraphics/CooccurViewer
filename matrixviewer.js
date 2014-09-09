@@ -64,55 +64,6 @@ var parseFile = function(text) {
   }
   console.timeEnd("chunking data");
   
-  console.time("constructing bmpData");
-  // create the pixels necessary to create an image for the overview
-  ds.bmpData = [];
-  for (var i = 0; i < ds.numWindow; i++) {
-    ds.bmpData.push([]);
-  }
-  
-  // be smart about the largest texture size.  try to get as much detail as possible
-  var maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-  
-  // do the naive thing if we're smaller than the max texture size
-  
-  if (ds.numPos < maxTexSize) {  
-    for (var i = 0; i < ds.numPos; i++) {
-      for (var j = 0; j < ds.numWindow; j++) {
-        ds.bmpData[j][i] = [(ds.data[(i * ds.numWindow + j) * 3 + 2] / ds.maxVal) * 255, 0, 0];
-      }
-    }    
-  } else {
-    var numPixelsToCollapse = Math.ceil(ds.numPos / maxTexSize);
-    var texWidth = Math.ceil(ds.numPos / numPixelsToCollapse);
-    for (var y = 0; y < ds.numWindow; y++) {
-      for (var x = 0; x < texWidth; x++) {
-        // get corresponding vertices from ds.data
-        var numPixels = numPixelsToCollapse;
-        var sumPixels = 0;
-        
-        for (var n = 0; n < numPixelsToCollapse; n++) {
-          var curIndex = ((x * numPixelsToCollapse) + n) * ds.numWindow + y;
-          
-          if (curIndex < ds.numPos * ds.numWindow) {
-            sumPixels += ds.data[curIndex * 3 + 2];
-          } else {
-            numPixels--;
-          }
-        }
-        
-        if (numPixels <= 0) {
-          ds.bmpData[y][x] = [0, 0, 0];
-          continue;
-        }
-          
-        var val = Math.floor(255 * ((sumPixels / numPixels) / ds.maxVal));
-        ds.bmpData[y][x] = [val, 0, 0];
-      }
-    }
-  }
-  console.timeEnd("constructing bmpData");
-  
   console.time("sending data to GPU");
   
   // compile the GPU data buffer
@@ -124,16 +75,10 @@ var parseFile = function(text) {
   gl.bindBuffer(ds.buf.target, ds.buf.buffer);
   gl.bufferData(ds.buf.target, ds.data, gl.STATIC_DRAW);
   
-  // ds.buf.compile(gl.STATIC_DRAW);
-  
   console.timeEnd("sending data to GPU");
   
   dataReady = true;
   console.timeEnd("parsing file");
-  
-  console.time("constructing bitmap");
-  debugImg();  
-  console.timeEnd("constructing bitmap");
 };
 
 // construct a bitmap image using `bitmap.js`.
@@ -154,7 +99,6 @@ var colorbrewerRampToBuffer = function(colors, width) {
   
   colors.forEach(function(color, n) {
     var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color);
-    console.log("adding color " + color + " to position " + (n*4) + " to " + (n*4+3));
     arr[n * 4]     = parseInt(result[1], 16);
     arr[n * 4 + 1] = parseInt(result[2], 16);
     arr[n * 4 + 2] = parseInt(result[3], 16);
@@ -180,6 +124,98 @@ var colorbrewerRampToTexture = function(colors) {
   colormapTexture.unbind(0);
 
   colormapWidth = w;
+};
+
+// given a x position (position number) and a y value (window value),
+// get the color that represents this value
+var getColorForPosition = function(x, y) {
+  var curIndex = (x * ds.numWindow + y) * 3 + 3;
+  
+  var data = ds.data[curIndex];
+  
+  return getColorFromDataValue(data);  
+}
+
+// given a particular value, return the color [r,g,b,a]
+// that represents this value
+var getColorFromDataValue = function(value) {
+  var arr = [];
+  
+  if ($("#docolorbrewer").prop('checked')) {
+    arr = [255, 255, 0];
+  } else {
+    arr = [value / ds.maxVal * 255, 0, 0, 255];
+  }
+  
+  return arr;
+};
+
+// take ds.data and turn it into a texture
+var overviewToTexture = function() {
+  console.time("constructing overview texture");
+  
+  var texWidth = ds.numPos;
+  var arr;
+  var maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+
+  // arrange the data as appropriate
+  if (ds.numPos < maxTexSize) {
+    arr = new Uint8Array(ds.numPos * ds.numWindow * 4)
+    
+    for (var x = 0; x < ds.numPos; x++) {
+      for (var y = 0; y < ds.numWindow; y++) {
+        var curVal = getColorForPosition(x, y);
+        var curIndex = (y * ds.numPos + x) * 4;
+        
+        for (var n = 0; n < 4; n++) {
+          arr[curIndex + n] = curVal[n];
+        }
+      }
+    }
+  } else {
+    var numPixelsToCollapse = Math.ceil(ds.numPos / maxTexSize);
+    texWidth = Math.ceil(ds.numPos / numPixelsToCollapse);
+    
+    arr = new Uint8Array(texWidth * ds.numWindow * 4);
+    
+    for (var y = 0; y < ds.numWindow; y++) {
+      for (var x = 0; x < texWidth; x++) {
+        var numPixels = numPixelsToCollapse;
+        var sumPixels = 0;
+        
+        for (var n = 0; n < numPixelsToCollapse; n++) {
+          var curIndex = ((x * numPixelsToCollapse) + n) * ds.numWindow + y;
+          
+          if (curIndex < ds.numPos * ds.numWindow) {
+            sumPixels += ds.data[curIndex * 3 + 2];
+          } else {
+            numPixels--;
+          }
+        }
+        
+        var destIndex = (y * texWidth + x) * 4;
+        if (numPixels <= 0) {
+          arr[destIndex + 3] = 255;
+          continue;
+        } 
+        
+        var curVal = getColorFromDataValue(sumPixels / numPixels);
+        for (var n = 0; n < 4; n++) {
+          arr[destIndex + n] = curVal[n];
+        }
+      }
+    }
+  }
+
+  // create the texture
+  textures['full'] = new GL.Texture(texWidth, ds.numWindow);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+  
+  textures['full'].bind(0);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, texWidth, ds.numWindow, 0, gl.RGBA, gl.UNSIGNED_BYTE, arr);
+  textures['full'].unbind(0);
+  
+  console.timeEnd("constructing overview texture");
 };
 
 var setInitBounds = function() {
@@ -253,7 +289,8 @@ var createTextures = function() {
   };
   
   // try rendering from an image
-  textures['full'] = GL.Texture.fromImage(document.getElementById("bmpimg"), defaultOpts);
+  //textures['full'] = GL.Texture.fromImage(document.getElementById("bmpimg"), defaultOpts);
+  overviewToTexture();
   
   // fix plane to the dimensions of the large ds.imgData texture
   overview = new GL.Mesh.plane();
