@@ -11,7 +11,8 @@ var overview, indicator, indicatorBackground;
 var indicatorWidth = 0;
 var indicatorHeight = 4;
 
-var chosenColormap = colorbrewer.OrRd['9'];
+var useBivariate = false;
+var chosenColormap;
 var colormapRGBA;
 var colormapTexture;
 var colormapWidth = 0;
@@ -93,6 +94,10 @@ var debugImg = function() {
   img.width = 800;
   img.id = "bmpimg";
   document.getElementById("img-container").appendChild(img);
+};
+
+var updateColormapChoice = function() {
+  chosenColormap = useBivariate ? colorbrewer.RdBu['11'] : colorbrewer.OrRd['9'];
 };
 
 // construct a Uint8 buffer for all hex-encoded colors given a specified
@@ -564,10 +569,16 @@ function main() {
   loadShaderFromFiles("texture", "texture.vs", "overview.fs");
   
   if (location.search == "?reads") {
+    useBivariate = false;
     $.get("readBreadthAll.csv", parseFile);
+  } else if (location.search == "?expected") {
+    useBivariate = true;
+    $.get("conjProbDiff.csv", parseFile);
   } else {
+    useBivariate = false;
     $.get("conjProb.csv", parseFile);
   }
   
+  updateColormapChoice();
   gl.ondraw();
 };
