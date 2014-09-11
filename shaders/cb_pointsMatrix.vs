@@ -1,6 +1,7 @@
 attribute vec3 position;
 
 uniform float pointSize;
+uniform float windowSize;
 uniform float minVal;
 uniform float maxVal;
 
@@ -29,7 +30,7 @@ vec4 getColorFromColorRamp() {
 }
 
 void main() {
-	gl_Position = gl_ModelViewProjectionMatrix * vec4(position.xy, 0.0, 1.0);
+	gl_Position = gl_ModelViewProjectionMatrix * vec4((position.x + position.y - (windowSize / 2.0)), position.x, -5.0, 1.0);
 	gl_PointSize = pointSize;
 	
 	vColor = getColorFromColorRamp();

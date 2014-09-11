@@ -12,6 +12,7 @@ var indicatorWidth = 0;
 var indicatorHeight = 4;
 
 var chosenColormap = colorbrewer.OrRd['9'];
+var colormapRGBA;
 var colormapTexture;
 var colormapWidth = 0;
 
@@ -20,7 +21,8 @@ var ds = {
   buf: 0,
   numWindow: 0,
   numPos: 0,
-  maxVal: 0,
+  minVal: 1000,
+  maxVal: -1000,
   name: ""
 };
 
@@ -55,8 +57,9 @@ var parseFile = function(text) {
       ds.data[curIndex + 1] = j;
       ds.data[curIndex + 2] = curValue;
       
-      // keep track of the largest value we've seen so far
+      // keep track of the largest/smallest value we've seen so far
       ds.maxVal = Math.max(ds.maxVal, curValue);
+      ds.minVal = Math.min(ds.minVal, curValue);
       
       // push the point to the data stack
       //ds.data.push(thisItem);
@@ -117,10 +120,10 @@ var colorbrewerRampToTexture = function(colors) {
   // see <http://code.google.com/p/chromium/issues/detail?id=125481>
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
   
-  var colorArray = colorbrewerRampToBuffer(colors, w);  
+  colormapRGBA = colorbrewerRampToBuffer(colors, w);  
   
   colormapTexture.bind(0);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, w, 0, gl.RGBA, gl.UNSIGNED_BYTE, colorArray);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, w, 0, gl.RGBA, gl.UNSIGNED_BYTE, colormapRGBA);
   colormapTexture.unbind(0);
 
   colormapWidth = w;
@@ -141,8 +144,18 @@ var getColorForPosition = function(x, y) {
 var getColorFromDataValue = function(value) {
   var arr = [];
   
-  if ($("#docolorbrewer").prop('checked')) {
-    arr = [255, 255, 0];
+  if ($("#usecolorbrewer").prop('checked')) {
+    // clamp min and max to lowest and highest ramp positions, respectively.
+    var cbIndex = 0;
+    if (value <= ds.minVal)
+      cbIndex = 0;
+    else if (value >= ds.maxVal)
+      cbIndex = chosenColormap.length - 1;
+    else
+      cbIndex = Math.floor((value - ds.minVal) / (ds.maxVal - ds.minVal) * (chosenColormap.length - 2)) * 4;
+      
+    arr = [colormapRGBA[cbIndex], colormapRGBA[cbIndex + 1], colormapRGBA[cbIndex + 2]];
+    
   } else {
     arr = [value / ds.maxVal * 255, 0, 0, 255];
   }
@@ -154,6 +167,12 @@ var getColorFromDataValue = function(value) {
 var overviewToTexture = function() {
   console.time("constructing overview texture");
   
+  // if the texture already exists, use it
+  var curTexture = $("#usecolorbrewer").prop('checked') ? "lightOver" : "colorOver";
+  if (textures[curTexture]) {
+    return;
+  }
+ 
   var texWidth = ds.numPos;
   var arr;
   var maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
@@ -207,13 +226,13 @@ var overviewToTexture = function() {
     }
   }
 
-  // create the texture
-  textures['full'] = new GL.Texture(texWidth, ds.numWindow);
+  // create the texture, if it doesn't exist
+  textures[curTexture] = new GL.Texture(texWidth, ds.numWindow);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
   
-  textures['full'].bind(0);
+  textures[curTexture].bind(0);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, texWidth, ds.numWindow, 0, gl.RGBA, gl.UNSIGNED_BYTE, arr);
-  textures['full'].unbind(0);
+  textures[curTexture].unbind(0);
   
   console.timeEnd("constructing overview texture");
 };
@@ -288,6 +307,9 @@ var createTextures = function() {
     type:      gl.UNSIGNED_BYTE
   };
   
+  // create the colorbrewer ramp texture so the shader can access values
+  colorbrewerRampToTexture(chosenColormap);
+  
   // try rendering from an image
   //textures['full'] = GL.Texture.fromImage(document.getElementById("bmpimg"), defaultOpts);
   overviewToTexture();
@@ -328,9 +350,6 @@ var createTextures = function() {
   }
   indicatorBackground.compile(gl.STATIC_DRAW);
   
-  // create the colorbrewer ramp texture so the shader can access values
-  colorbrewerRampToTexture(chosenColormap);
-  
   // clean up state
   gl.bindTexture(gl.TEXTURE_2D, null);
   
@@ -358,9 +377,10 @@ var updateIndicator = function(setupOnly) {
 
 gl.ondraw = function() {
   var ptShader = $("#dodiagonal").prop('checked') ? shaders['pointsDiag'] : shaders['points'];
+  var cbPtShader = $("#dodiagonal").prop('checked') ? shaders['cb_pointsDiag'] : shaders['cb_points'];
 
-  if (!dataReady || !ptShader || !shaders['overview'] || 
-      !shaders['solid'] || !shaders['cb_points']) 
+  if (!dataReady || !ptShader || !cbPtShader || 
+      !shaders['overview'] || !shaders['solid']) 
   {
     timer = setTimeout("gl.ondraw()", 300);
     return;
@@ -390,8 +410,9 @@ gl.ondraw = function() {
   vertBuffer['position'] = ds.buf;
   if ($("#usecolorbrewer").prop('checked')) {
     colormapTexture.bind(0);
-    shaders['cb_points'].uniforms({
+    cbPtShader.uniforms({
       pointSize: 1,
+      windowSize: ds.numWindow,
       maxVal: ds.maxVal,
       minVal: 0,
       rampTexWidth: colormapWidth,
@@ -410,12 +431,13 @@ gl.ondraw = function() {
   gl.popMatrix();
   
   // draw the overview
-  textures['full'].bind(0);
+  var curTexture = $("#usecolorbrewer").prop('checked') ? "lightOver" : "colorOver";
+  textures[curTexture].bind(0);
   shaders['overview'].uniforms({
     texture: 0,
     minVal: y_min
   }).draw(overview);
-  textures['full'].unbind(0);  
+  textures[curTexture].unbind(0);  
   
   // draw the indicator
   shaders['solid'].uniforms({
@@ -526,11 +548,15 @@ function main() {
   };
   
   $("#dodiagonal").change(gl.ondraw);
-  $("#usecolorbrewer").change(gl.ondraw);
+  $("#usecolorbrewer").change(function() {
+    overviewToTexture();
+    gl.ondraw();
+  });
   
   loadShaderFromFiles("points");
   loadShaderFromFiles("cb_points", "cb_points.vs", "points.fs");
   loadShaderFromFiles("pointsDiag", "pointsMatrix.vs", "points.fs");
+  loadShaderFromFiles("cb_pointsDiag", "cb_pointsMatrix.vs", "points.fs");
   loadShaderFromFiles("overview");
   loadShaderFromFiles("solid");
   
