@@ -152,12 +152,18 @@ var getColorFromDataValue = function(value) {
   if ($("#usecolorbrewer").prop('checked')) {
     // clamp min and max to lowest and highest ramp positions, respectively.
     var cbIndex = 0;
-    if (value <= ds.minVal)
+    if (value <= ds.minVal && !useBivariate)
       cbIndex = 0;
-    else if (value >= ds.maxVal)
+    else if (value >= ds.maxVal && !useBivariate)
       cbIndex = chosenColormap.length - 1;
-    else
-      cbIndex = Math.floor((value - ds.minVal) / (ds.maxVal - ds.minVal) * (chosenColormap.length - 2)) * 4;
+    else if (value == 0 && useBivariate) {
+      cbIndex = Math.floor(chosenColormap.length / 2);
+      //console.log("mid value");
+    } else
+      cbIndex = Math.floor((value - ds.minVal) / (ds.maxVal - ds.minVal) * (chosenColormap.length - 2));
+    
+    // the stride is 4!
+    cbIndex *= 4;
       
     arr = [colormapRGBA[cbIndex], colormapRGBA[cbIndex + 1], colormapRGBA[cbIndex + 2]];
     
@@ -415,11 +421,13 @@ gl.ondraw = function() {
   vertBuffer['position'] = ds.buf;
   if ($("#usecolorbrewer").prop('checked')) {
     colormapTexture.bind(0);
+    var bivar = useBivariate ? 1 : 0;
     cbPtShader.uniforms({
       pointSize: 1,
       windowSize: ds.numWindow,
       maxVal: ds.maxVal,
       minVal: 0,
+      bivariate: bivar,
       rampTexWidth: colormapWidth,
       numSteps: chosenColormap.length,
       colorRamp: 0

@@ -5,6 +5,7 @@ uniform float windowSize;
 uniform float minVal;
 uniform float maxVal;
 
+uniform int bivariate;
 uniform float rampTexWidth;
 uniform float numSteps;
 uniform sampler2D colorRamp;
@@ -14,10 +15,12 @@ varying vec4 vColor;
 vec4 getColorFromColorRamp() {
 	// figure out where in the ramp we are 
 	float cbIndex = 0.0;
-	if (position.z <= minVal) {
+	if (position.z <= minVal && bivariate == 0) {
 		cbIndex = 0.0;
-	} else if (position.z >= maxVal) {
+	} else if (position.z >= maxVal && bivariate == 0) {
 		cbIndex = numSteps - 1.0;
+	} else if (position.z == 0.0 && bivariate == 1) {
+		cbIndex = floor(numSteps / 2.0);
 	} else {
 		cbIndex = floor(((position.z - minVal) / (maxVal - minVal)) * (numSteps - 2.0)) + 1.0;
 	}
