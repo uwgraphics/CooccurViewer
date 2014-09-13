@@ -3,6 +3,7 @@ var gl = GL.create({width: 800, height: 800});
 window.onload = main;
 
 var dataReady = false;
+var dataBreadthReady = true;
 var timer = null;
 
 var shaders = [];
@@ -19,11 +20,13 @@ var colormapWidth = 0;
 
 var ds = {
   data: [],
+  depth: [],
   buf: 0,
   numWindow: 0,
   numPos: 0,
   minVal: 1000,
   maxVal: -1000,
+  maxDepth: 0,
   name: ""
 };
 
@@ -35,7 +38,6 @@ var parseFile = function(text) {
   console.time("parsing file");
   dataReady = false;
   
-  
   console.time("chunking data");
   var delimiter = ",";
   var lines = text.trim("\r").split("\n");
@@ -45,7 +47,7 @@ var parseFile = function(text) {
   
   ds.numPos = lines.length;
   ds.numWindow = lines[0].length;
-  ds.data = new Float32Array(ds.numPos * ds.numWindow * 3);
+  ds.data = new Float32Array(ds.numPos * ds.numWindow * 4);
   
   for (var i = 0; i < ds.numPos; i++) {
     for (var j = 0; j < ds.numWindow; j++) {
@@ -53,7 +55,7 @@ var parseFile = function(text) {
       
       // x,y position and z is the value
       //var thisItem = [i, j, curValue];
-      var curIndex = (i * ds.numWindow + j) * 3
+      var curIndex = (i * ds.numWindow + j) * 4
       ds.data[curIndex] = i;
       ds.data[curIndex + 1] = j;
       ds.data[curIndex + 2] = curValue;
@@ -68,13 +70,17 @@ var parseFile = function(text) {
   }
   console.timeEnd("chunking data");
   
+  // cheap flag to see whether we should load readBreadth data as well
+  if (useBivariate)
+    $.get("readBreadthAll.csv", parseReadDepth);
+  
   console.time("sending data to GPU");
   
   // compile the GPU data buffer
   ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
   ds.buf.buffer = gl.createBuffer();
-  ds.buf.buffer.length = ds.numPos * ds.numWindow * 3;
-  ds.buf.buffer.spacing = 3;
+  ds.buf.buffer.length = ds.numPos * ds.numWindow * 4;
+  ds.buf.buffer.spacing = 4;
   
   gl.bindBuffer(ds.buf.target, ds.buf.buffer);
   gl.bufferData(ds.buf.target, ds.data, gl.STATIC_DRAW);
@@ -83,6 +89,47 @@ var parseFile = function(text) {
   
   dataReady = true;
   console.timeEnd("parsing file");
+};
+
+// adds read depth information to the data parsed
+var parseReadDepth = function(text) {
+  if (!text) {
+    console.warn("no text found for parseReadDepth().");
+    return;
+  }
+  
+  console.time("parsing read depth file");
+  
+  console.time("chunking data");
+  var delimiter = ",";
+  var lines = text.trim("\r").split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    lines[i] = lines[i].split(delimiter);
+  }
+  
+  // do some range checks to make sure we're looking at the same original data (same window size, numPositions)
+  if (ds.numPos != lines.length) {
+    console.warn("number of lines in depth does not match data: expected %d, depth had %d lines", ds.numPos, lines.length);
+  } 
+  
+  if (ds.numWindow != lines[0].length) {
+    console.warn("number of items in a window does not match data: expected %d, depth had a window size of %d", ds.numWindow, lines[0].length);
+  }
+  
+  // if the window and positions don't line up, align the positions to the start
+  // and center align the window.
+  var windowOffset = (ds.numWindow - lines[0].length) / 2;
+  for (var i = 0; i < lines.length; i++) {
+    for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
+      var curValue = +lines[i][j - windowOffset];
+      var curIndex = (i * ds.numWindow + j) * 4 + 3;
+      
+      ds.data[curIndex] = curValue;
+      ds.maxDepth = Math.max(ds.maxDepth, curValue);      
+    }
+  }  
+  
+  console.timeEnd("parsing read depth file");
 };
 
 // construct a bitmap image using `bitmap.js`.
@@ -137,7 +184,7 @@ var colorbrewerRampToTexture = function(colors) {
 // given a x position (position number) and a y value (window value),
 // get the color that represents this value
 var getColorForPosition = function(x, y) {
-  var curIndex = (x * ds.numWindow + y) * 3 + 3;
+  var curIndex = (x * ds.numWindow + y) * 4 + 3;
   
   var data = ds.data[curIndex];
   
@@ -217,7 +264,7 @@ var overviewToTexture = function() {
           var curIndex = ((x * numPixelsToCollapse) + n) * ds.numWindow + y;
           
           if (curIndex < ds.numPos * ds.numWindow) {
-            sumPixels += ds.data[curIndex * 3 + 2];
+            sumPixels += ds.data[curIndex * 4 + 2];
           } else {
             numPixels--;
           }
@@ -390,7 +437,7 @@ gl.ondraw = function() {
   var ptShader = $("#dodiagonal").prop('checked') ? shaders['pointsDiag'] : shaders['points'];
   var cbPtShader = $("#dodiagonal").prop('checked') ? shaders['cb_pointsDiag'] : shaders['cb_points'];
 
-  if (!dataReady || !ptShader || !cbPtShader || 
+  if (!dataReady || !dataBreadthReady || !ptShader || !cbPtShader || 
       !shaders['overview'] || !shaders['solid']) 
   {
     timer = setTimeout("gl.ondraw()", 300);
@@ -418,7 +465,7 @@ gl.ondraw = function() {
   setZoomPan(); // unused right now...
   
   var vertBuffer = [];
-  vertBuffer['position'] = ds.buf;
+  vertBuffer['position'] = ds.buf; 
   if ($("#usecolorbrewer").prop('checked')) {
     colormapTexture.bind(0);
     var bivar = useBivariate ? 1 : 0;
@@ -582,6 +629,7 @@ function main() {
   } else if (location.search == "?expected") {
     useBivariate = true;
     $.get("conjProbDiff.csv", parseFile);
+    //dataBreadthReady = false;
   } else {
     useBivariate = false;
     $.get("conjProb.csv", parseFile);
