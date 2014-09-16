@@ -71,23 +71,24 @@ var parseFile = function(text) {
   console.timeEnd("chunking data");
   
   // cheap flag to see whether we should load readBreadth data as well
-  if (useBivariate)
+  if (useBivariate) {
     $.get("readBreadthAll.csv", parseReadDepth);
+  } else {
+    console.time("sending data to GPU");
+    
+    // compile the GPU data buffer
+    ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
+    ds.buf.buffer = gl.createBuffer();
+    ds.buf.buffer.length = ds.numPos * ds.numWindow * 4;
+    ds.buf.buffer.spacing = 4;
+    
+    gl.bindBuffer(ds.buf.target, ds.buf.buffer);
+    gl.bufferData(ds.buf.target, ds.data, gl.STATIC_DRAW);
+    
+    console.timeEnd("sending data to GPU");
+    dataReady = true;
+  }
   
-  console.time("sending data to GPU");
-  
-  // compile the GPU data buffer
-  ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
-  ds.buf.buffer = gl.createBuffer();
-  ds.buf.buffer.length = ds.numPos * ds.numWindow * 4;
-  ds.buf.buffer.spacing = 4;
-  
-  gl.bindBuffer(ds.buf.target, ds.buf.buffer);
-  gl.bufferData(ds.buf.target, ds.data, gl.STATIC_DRAW);
-  
-  console.timeEnd("sending data to GPU");
-  
-  dataReady = true;
   console.timeEnd("parsing file");
 };
 
@@ -130,6 +131,21 @@ var parseReadDepth = function(text) {
   }  
   
   console.timeEnd("parsing read depth file");
+  
+  console.time("sending data to GPU");
+  
+  // compile the GPU data buffer
+  ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
+  ds.buf.buffer = gl.createBuffer();
+  ds.buf.buffer.length = ds.numPos * ds.numWindow * 4;
+  ds.buf.buffer.spacing = 4;
+  
+  gl.bindBuffer(ds.buf.target, ds.buf.buffer);
+  gl.bufferData(ds.buf.target, ds.data, gl.STATIC_DRAW);
+  
+  console.timeEnd("sending data to GPU");
+  
+  dataReady = true;
 };
 
 // construct a bitmap image using `bitmap.js`.
@@ -474,6 +490,7 @@ gl.ondraw = function() {
       windowSize: ds.numWindow,
       maxVal: ds.maxVal,
       minVal: 0,
+      maxDepth: ds.maxDepth,
       bivariate: bivar,
       rampTexWidth: colormapWidth,
       numSteps: chosenColormap.length,
@@ -582,36 +599,43 @@ var drags = function(e) {
   }  
 };
 
+// Function to handle asynchronous loading and compilation of shaders.
+var loadShaderFromFiles = function(name, opt_vn, opt_fn, callback) {
+  var vn = opt_vn || name + '.vs';
+  var fn = opt_fn || name + '.fs';
+  var shaderDir = 'shaders/';
+  var vd, fd;
+  $.get(shaderDir + vn, function(data) {
+    vd = data;
+    if (fd) {
+      shaders[name] = new GL.Shader(vd, fd);
+      if (callback)
+        callback();
+    }
+  });
+  $.get(shaderDir + fn, function(data) {
+    fd = data;
+    if (vd) {
+      shaders[name] = new GL.Shader(vd, fd);
+      if (callback)
+        callback();
+    }
+  });
+};
+
+var reloadShader = function(name, vs, fs) {
+  console.log("reloading shader " + name + "... ");
+  delete shaders[name];
+  
+  loadShaderFromFiles(name, vs, fs, gl.ondraw);
+};
+
 function main() {
   gl.canvas.id = "webglcanvas";
   document.getElementById("canvas-container").appendChild(gl.canvas);
   
   // set up the viewport
   resizeCanvas();
-  
-  // Function to handle asynchronous loading and compilation of shaders.
-  var loadShaderFromFiles = function(name, opt_vn, opt_fn) {
-    var vn = opt_vn || name + '.vs';
-    var fn = opt_fn || name + '.fs';
-    var shaderDir = 'shaders/';
-    var vd, fd;
-    $.get(shaderDir + vn, function(data) {
-      vd = data;
-      if (fd)
-        shaders[name] = new GL.Shader(vd, fd);
-    });
-    $.get(shaderDir + fn, function(data) {
-      fd = data;
-      if (vd)
-        shaders[name] = new GL.Shader(vd, fd);
-    });
-  };
-  
-  $("#dodiagonal").change(gl.ondraw);
-  $("#usecolorbrewer").change(function() {
-    overviewToTexture();
-    gl.ondraw();
-  });
   
   loadShaderFromFiles("points");
   loadShaderFromFiles("cb_points", "cb_points.vs", "points.fs");
@@ -623,6 +647,12 @@ function main() {
   // debugging
   loadShaderFromFiles("texture", "texture.vs", "overview.fs");
   
+  $("#dodiagonal").change(gl.ondraw);
+  $("#usecolorbrewer").change(function() {
+    overviewToTexture();
+    gl.ondraw();
+  });
+
   if (location.search == "?reads") {
     useBivariate = false;
     $.get("readBreadthAll.csv", parseFile);
