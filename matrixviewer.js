@@ -1,5 +1,10 @@
 var gl = GL.create({width: 800, height: 800});
 
+// colobrewer.RdBu['11'] set to luminance 65 (tol: 5)
+// http://graphics.cs.wisc.edu/Projects/RampGen/build_ramps.html
+var isoluminantRdBu = ["#EC7B8B", "#FF696B", "#F07C68", "#D38D6D", "#B59887", "#9E9E9E", "#8FA0AA", "#75A4BB", "#59A6D4", "#68A0E8", "#829ED9"];
+var isoluminantRdBuFixedWhite = ["#EC7B8B", "#FF696B", "#F07C68", "#D38D6D", "#B59887", "#FFFFFF", "#8FA0AA", "#75A4BB", "#59A6D4", "#68A0E8", "#829ED9"];
+
 window.onload = main;
 
 var dataReady = false;
@@ -120,7 +125,8 @@ var parseReadDepth = function(text) {
   // if the window and positions don't line up, align the positions to the start
   // and center align the window.
   var windowOffset = (ds.numWindow - lines[0].length) / 2;
-  for (var i = 0; i < lines.length; i++) {
+  var numPositions = Math.min(lines.length, ds.numPos);
+  for (var i = 0; i < numPositions; i++) {
     for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
       var curValue = +lines[i][j - windowOffset];
       var curIndex = (i * ds.numWindow + j) * 4 + 3;
@@ -160,7 +166,8 @@ var debugImg = function() {
 };
 
 var updateColormapChoice = function() {
-  chosenColormap = useBivariate ? colorbrewer.RdBu['11'] : colorbrewer.OrRd['9'];
+  //chosenColormap = useBivariate ? colorbrewer.RdBu['11'] : colorbrewer.OrRd['9'];
+  chosenColormap = useBivariate ? isoluminantRdBu : colorbrewer.OrRd['9'];
 };
 
 // construct a Uint8 buffer for all hex-encoded colors given a specified
@@ -485,6 +492,7 @@ gl.ondraw = function() {
   if ($("#usecolorbrewer").prop('checked')) {
     colormapTexture.bind(0);
     var bivar = useBivariate ? 1 : 0;
+    var darken = $("#dodarkening").prop('checked') ? 1 : 0;
     cbPtShader.uniforms({
       pointSize: 1,
       windowSize: ds.numWindow,
@@ -492,6 +500,7 @@ gl.ondraw = function() {
       minVal: 0,
       maxDepth: ds.maxDepth,
       bivariate: bivar,
+      darkening: darken,
       rampTexWidth: colormapWidth,
       numSteps: chosenColormap.length,
       colorRamp: 0
@@ -647,8 +656,25 @@ function main() {
   // debugging
   loadShaderFromFiles("texture", "texture.vs", "overview.fs");
   
+  var changeColormap = function() {
+    if ($("#useisoluminant").prop('checked')) {
+      if ($("#fixwhitecenter").prop('checked')) {
+        colorbrewerRampToTexture(isoluminantRdBuFixedWhite);
+      } else {
+        colorbrewerRampToTexture(isoluminantRdBu);
+      }
+    } else {
+      colorbrewerRampToTexture(colorbrewer.RdBu['11']);
+    }
+    gl.ondraw();
+  };
+  
   $("#dodiagonal").change(gl.ondraw);
+  $("#dodarkening").change(gl.ondraw);
+  $("#useisoluminant").change(changeColormap);
+  $("#fixwhitecenter").change(changeColormap);
   $("#usecolorbrewer").change(function() {
+    $("input.bivariateOpts").prop("disabled", !this.checked);
     overviewToTexture();
     gl.ondraw();
   });

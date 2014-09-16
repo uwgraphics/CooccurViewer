@@ -7,6 +7,8 @@ uniform float maxVal;
 uniform float maxDepth;
 
 uniform int bivariate;
+uniform int darkening;
+
 uniform float rampTexWidth;
 uniform float numSteps;
 uniform sampler2D colorRamp;
@@ -141,18 +143,15 @@ vec4 getColorFromColorRamp() {
 		vec3 labColor = LABtoLCH(RGBtoLAB(texture2D(colorRamp, vec2(xCoord, yCoord) + vec2(0.03)).rgb));
 		
 		// darkening (works)
-		//labColor.x = labColor.x * dimFactor;
+		if (darkening == 1) {
+			labColor.x = labColor.x * dimFactor;
+		} else {
+			labColor = mix(labColor, vec3(100.0, 0.0, 0.0), 1.0 - dimFactor);
+		}
 		
-		// lightening (doesn't work)
-		//labColor.x = labColor.x + ((position.w / maxDepth) * (1.0 - labColor.x));
-		//labColor.y = labColor.y + ((position.w / maxDepth) * (1.0 - labColor.y));
-		
-		// second try...
-		//return vec4(mix(texture2D(colorRamp, vec2(xCoord, yCoord) + vec2(0.03)).rgb, vec3(1.0, 1.0, 1.0), 1.0 - dimFactor), 1.0);
-		
-		// third try... lighten and desaturate
-		labColor = mix(labColor, vec3(100.0, 0.0, 0.0), 1.0 - dimFactor);
-		labColor.y = labColor.y * pow(1.0, dimFactor);
+		if (false) {
+			labColor.y = labColor.y * pow(1.0, dimFactor);
+		}
 		
 		return vec4(LABtoRGB(LCHtoLAB(labColor), true), 1.0);	
 	}
