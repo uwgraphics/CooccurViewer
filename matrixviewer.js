@@ -279,7 +279,7 @@ var getColorFromDataValue = function(value) {
 
 // take ds.data and turn it into a texture
 var overviewToTexture = function() {
-  console.time("constructing overview texture");
+  console.time("constructing overview texture using CPU");
   
   // if the texture already exists, use it
   var curTexture = $("#usecolorbrewer").prop('checked') ? "lightOver" : "colorOver";
@@ -348,7 +348,54 @@ var overviewToTexture = function() {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, texWidth, ds.numWindow, 0, gl.RGBA, gl.UNSIGNED_BYTE, arr);
   textures[curTexture].unbind(0);
   
-  console.timeEnd("constructing overview texture");
+  console.timeEnd("constructing overview texture using CPU");
+};
+
+// TODO: shader doesn't support non-colorbrewer coloring mode
+var constructOverviewTexture = function() {
+  console.time("constructing overview texture using WebGL drawing");
+  
+  // if the texture already exists, use it
+  var curTexture = $("#usecolorbrewer").prop('checked') ? "lightOver" : "colorOver";
+  
+  // TODO
+  if (!$("#usecolorbrewer").prop('checked')) {
+    console.error("fillOverview shader does not support non-colorbrewer drawing");
+    return;
+  }
+  
+  if (!textures[curTexture]) {
+    var texHeight = gl.canvas.width * ds.numWindow / ds.numPos
+    textures[curTexture] = new GL.Texture(gl.canvas.width, texHeight);
+  }
+  
+  textures[curTexture].drawTo(function() {
+    gl.clearColor(0.0, 0.0, 0.0, 0.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    
+    var bivar = useBivariate ? 1 : 0;
+    var darken = $("#dodarkening").prop('checked') ? 1 : 0;
+    
+    var vertBuffer = [];
+    vertBuffer['position'] = ds.buf; 
+    colormapTexture.bind(0);
+    
+    shaders['fillOverview'].uniforms({
+      dataSize: [ds.numPos, ds.numWindow],
+      minVal: ds.minVal,
+      maxVal: ds.maxVal,
+      maxDepth: ds.maxDepth,
+      bivariate: bivar,
+      darkening: darken,
+      rampTexWidth: colormapWidth,
+      numSteps: chosenColormap.length,
+      colorRamp: 0
+    }).drawBuffers(vertBuffer, null, gl.POINTS);
+    
+    colormapTexture.unbind(0);
+  });
+  
+  console.timeEnd("constructing overview texture using WebGL drawing");
 };
 
 var setInitBounds = function() {
@@ -426,7 +473,8 @@ var createTextures = function() {
   
   // try rendering from an image
   //textures['full'] = GL.Texture.fromImage(document.getElementById("bmpimg"), defaultOpts);
-  overviewToTexture();
+  //overviewToTexture();
+  //constructOverviewTexture();
   
   // fix plane to the dimensions of the large ds.imgData texture
   overview = new GL.Mesh.plane();
@@ -494,7 +542,7 @@ gl.ondraw = function() {
   var cbPtShader = $("#dodiagonal").prop('checked') ? shaders['cb_pointsDiag'] : shaders['cb_points'];
 
   if (!dataReady || !dataBreadthReady || !ptShader || !cbPtShader || 
-      !shaders['overview'] || !shaders['solid']) 
+      !shaders['overview'] || !shaders['solid'] || !shaders['fillOverview']) 
   {
     timer = setTimeout("gl.ondraw()", 300);
     return;
@@ -503,6 +551,8 @@ gl.ondraw = function() {
   if (!texturesCreated) {
     createTextures();
   }
+  
+  constructOverviewTexture();
   
   console.time("gl.ondraw()");
   
@@ -548,6 +598,7 @@ gl.ondraw = function() {
   }
   
   gl.popMatrix();
+  
   
   // draw the overview
   var curTexture = $("#usecolorbrewer").prop('checked') ? "lightOver" : "colorOver";
@@ -683,7 +734,10 @@ function main() {
   loadShaderFromFiles("cb_points", "cb_points.vs", "points.fs");
   loadShaderFromFiles("pointsDiag", "pointsMatrix.vs", "points.fs");
   loadShaderFromFiles("cb_pointsDiag", "cb_pointsMatrix.vs", "points.fs");
+  
   loadShaderFromFiles("overview");
+  loadShaderFromFiles("fillOverview", "fillOverview.vs", "points.fs");
+  
   loadShaderFromFiles("solid");
   
   // debugging
