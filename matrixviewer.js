@@ -39,41 +39,74 @@ var screenOffset = [0, 0];
 var scale = 1;
 var offset = [0, 0];
 
-var parseFile = function(text) {
+var parseFile = function(text, binary) {
   console.time("parsing file");
   dataReady = false;
   
-  console.time("chunking data");
-  var delimiter = ",";
-  var lines = text.trim("\r").split("\n");
-  for (var i = 0; i < lines.length; i++) {
-    lines[i] = lines[i].split(delimiter);
-  }
-  
-  ds.numPos = lines.length;
-  ds.numWindow = lines[0].length;
-  ds.data = new Float32Array(ds.numPos * ds.numWindow * 4);
-  
-  for (var i = 0; i < ds.numPos; i++) {
-    for (var j = 0; j < ds.numWindow; j++) {
-      var curValue = +lines[i][j];
-      
-      // x,y position and z is the value
-      //var thisItem = [i, j, curValue];
-      var curIndex = (i * ds.numWindow + j) * 4
-      ds.data[curIndex] = i;
-      ds.data[curIndex + 1] = j;
-      ds.data[curIndex + 2] = curValue;
-      
-      // keep track of the largest/smallest value we've seen so far
-      ds.maxVal = Math.max(ds.maxVal, curValue);
-      ds.minVal = Math.min(ds.minVal, curValue);
-      
-      // push the point to the data stack
-      //ds.data.push(thisItem);
+  if (binary) {
+    console.time("reading binary data");
+    
+    // assumes text is of type 'arraybuffer'
+    var dv = new DataView(text);
+    
+    // format of the file is windowSize (int), numPositions (int), then data
+    ds.numWindow = dv.getInt32(0);
+    ds.numPos = dv.getInt32(4);
+    
+    console.log("Found %d positions with %d window size", ds.numPos, ds.numWindow);
+    console.log("Number of elements found: %d, expected %d", (dv.byteLength - 8) / 4, ds.numPos * ds.numWindow);
+    
+    ds.data = new Float32Array(ds.numPos * ds.numWindow * 4);
+    var numFloats = ds.numPos * ds.numWindow;
+    for (var i = 0, offset = 8; i < ds.numPos; i++) {
+      for (var j = 0; j < ds.numWindow; j++, offset += 4) {
+        var curValue = dv.getFloat32(offset);
+        
+        var curIndex = (i * ds.numWindow + j) * 4
+        ds.data[curIndex] = i;
+        ds.data[curIndex + 1] = j;
+        ds.data[curIndex + 2] = curValue;
+        
+        ds.maxVal = Math.max(ds.maxVal, curValue);
+        ds.minVal = Math.min(ds.minVal, curValue);
+      }
     }
+    
+    console.timeEnd("reading binary data");
+    
+  } else { // assume default is csv  
+    console.time("chunking data");
+    var delimiter = ",";
+    var lines = text.trim("\r").split("\n");
+    for (var i = 0; i < lines.length; i++) {
+      lines[i] = lines[i].split(delimiter);
+    }
+    
+    ds.numPos = lines.length;
+    ds.numWindow = lines[0].length;
+    ds.data = new Float32Array(ds.numPos * ds.numWindow * 4);
+    
+    for (var i = 0; i < ds.numPos; i++) {
+      for (var j = 0; j < ds.numWindow; j++) {
+        var curValue = +lines[i][j];
+        
+        // x,y position and z is the value
+        //var thisItem = [i, j, curValue];
+        var curIndex = (i * ds.numWindow + j) * 4
+        ds.data[curIndex] = i;
+        ds.data[curIndex + 1] = j;
+        ds.data[curIndex + 2] = curValue;
+        
+        // keep track of the largest/smallest value we've seen so far
+        ds.maxVal = Math.max(ds.maxVal, curValue);
+        ds.minVal = Math.min(ds.minVal, curValue);
+        
+        // push the point to the data stack
+        //ds.data.push(thisItem);
+      }
+    }
+    console.timeEnd("chunking data");
   }
-  console.timeEnd("chunking data");
   
   // cheap flag to see whether we should load readBreadth data as well
   if (useBivariate) {
@@ -235,7 +268,7 @@ var getColorFromDataValue = function(value) {
     // the stride is 4!
     cbIndex *= 4;
       
-    arr = [colormapRGBA[cbIndex], colormapRGBA[cbIndex + 1], colormapRGBA[cbIndex + 2]];
+    arr = [colormapRGBA[cbIndex], colormapRGBA[cbIndex + 1], colormapRGBA[cbIndex + 2], 255];
     
   } else {
     arr = [value / ds.maxVal * 255, 0, 0, 255];
@@ -683,9 +716,24 @@ function main() {
     useBivariate = false;
     $.get("readBreadthAll.csv", parseFile);
   } else if (location.search == "?expected") {
+    // jQuery looks too hard here; it's not implemented yet for ArrayBuffer 
+    // xhr requests, which is an HTML5 phenomenon:
+    // http://www.artandlogic.com/blog/2013/11/jquery-ajax-blobs-and-array-buffers/
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', "conjProbDiff.dat", true);
+    xhr.responseType = 'arraybuffer';
+    
+    xhr.addEventListener('load', function() {
+      if (xhr.status == 200) {
+        parseFile(xhr.response, true);
+      } else {
+        console.warning("failed to load requested file (status: %d)", xhr.status);
+        console.trace();
+      }
+    });
+    
     useBivariate = true;
-    $.get("conjProbDiff.csv", parseFile);
-    //dataBreadthReady = false;
+    xhr.send(null);
   } else {
     useBivariate = false;
     $.get("conjProb.csv", parseFile);
