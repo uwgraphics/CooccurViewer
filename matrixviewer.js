@@ -127,6 +127,9 @@ var parseFile = function(text, binary) {
     dataReady = true;
   }
   
+  // once data is loaded, update the labels
+  updateAxisLabels();
+  
   console.timeEnd("parsing file");
 };
 
@@ -661,6 +664,34 @@ var setCleanXInput = function(x) {
   }
 };
 
+// adds spaces to delineate thousands (only when >=5 digits)
+// .. does not handle decimals
+var spacify = function(number) {
+  number = number + "";
+  if (number.length >= 5) {
+    number = number.replace(/(\d)(?=(\d{3})+$)/g, '$1 ');
+  }
+  
+  return number;
+};
+
+var updateAxisLabels = function() {
+  var xmin = Math.floor(-screenOffset[0]);
+  var xmax = Math.floor(-screenOffset[0] + gl.canvas.width);
+  
+  $("#label-xmin").html(spacify(xmin));
+  $("#label-xmax").html(spacify(xmax));
+  if ($("#dodiagonal").prop('checked')) {
+    var ymin = xmin;
+    var ymax = Math.floor(-screenOffset[0] + gl.canvas.height - (indicatorHeight + ds.numWindow / ds.numPos));
+    
+    $("#label-ymin").html(spacify(ymin));
+    $("#label-ymax").html(spacify(ymax));
+  } else {
+    console.warn("axis labels not implemented for non-diagonal representations");
+  }
+};
+
 // ## Handlers for mouse-interaction
 // Handle panning the canvas.
 var panX, panY;
@@ -671,6 +702,7 @@ gl.onmousedown = function(e) {
   panY = gl.canvas.height - e.y;
   
   setCleanXInput(panX);
+  updateAxisLabels();
   gl.ondraw();
 };
 
@@ -733,6 +765,7 @@ function main() {
   // set up the viewport
   resizeCanvas();
   
+  // load the shaders
   loadShaderFromFiles("points");
   loadShaderFromFiles("cb_points", "cb_points.vs", "points.fs");
   loadShaderFromFiles("pointsDiag", "pointsMatrix.vs", "points.fs");

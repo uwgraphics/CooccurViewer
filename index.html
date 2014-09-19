@@ -11,29 +11,8 @@
     <!-- boostrap -->
     <link href="lib/bootstrap.min.css" rel="stylesheet" />
     
-    <!-- local stylesheet 
-    <link rel="stylesheet" href="style.css" />-->
-    <style type="text/css">
-        body {
-            padding-top: 70px;
-        }
-        
-        canvas { 
-            margin: 0 auto 20px;
-            border: 1px solid black;
-            display: block;
-        }
-    
-        .navbar-brand img {
-            margin: -12px 7px 0 0;
-        }
-        
-        #img-container img {
-            display: none;
-            margin: 20px auto;
-            border: 1px solid black;
-        }
-    </style>
+    <!-- local stylesheet -->
+    <link rel="stylesheet" href="style.css" />
     
 </head>
 <body>
@@ -66,7 +45,13 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-sm-12" id="canvas-container">
-            
+            <!-- canvas(es) will be added here -->
+            <div id="canvas-labels">
+                <div id="label-xmin"></div>
+                <div id="label-xmax"></div>
+                <div id="label-ymin"></div>
+                <div id="label-ymax"></div>
+            </div>
         </div>
     </div>
     
