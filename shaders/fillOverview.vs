@@ -158,8 +158,14 @@ vec4 getColorFromColorRamp() {
 }
 
 void main() {
+	// compute the z-position based on the absolute value of the position
+	// [minVal, maxVal] -> [1, 0];
+	float zpos = abs(position.z) / max(abs(minVal), abs(maxVal));
+	zpos = (zpos - 1.0) * -1.0;
+	
+	
 	// translate the x,y position of the point to x,y position in the output texture
-	gl_Position = vec4(position.xy / dataSize * vec2(2.0) - vec2(1.0), abs(position.z), 1.0);
+	gl_Position = vec4(position.xy / dataSize * vec2(2.0) - vec2(1.0), zpos, 1.0);
 	gl_PointSize = 1.0;
 	
 	vColor = getColorFromColorRamp();

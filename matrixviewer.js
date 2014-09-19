@@ -370,11 +370,14 @@ var constructOverviewTexture = function() {
   }
   
   textures[curTexture].drawTo(function() {
-    gl.clearColor(0.0, 0.0, 0.0, 0.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    
     var bivar = useBivariate ? 1 : 0;
     var darken = $("#dodarkening").prop('checked') ? 1 : 0;
+    
+    if (darken)
+      gl.clearColor(0.0, 0.0, 0.0, 0.0);
+    else
+      gl.clearColor(1.0, 1.0, 1.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
     var vertBuffer = [];
     vertBuffer['position'] = ds.buf; 
