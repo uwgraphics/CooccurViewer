@@ -405,6 +405,8 @@ var constructOverviewTexture = function() {
 };
 
 var setInitBounds = function() {
+  console.error("function not supported by any shader");
+  
   var b = [[0, 344], [0, 301]];
   
   offset = [-(b[0][0] + b[0][1]) / 2.0, -(b[1][0] + b[1][1]) / 2.0];
@@ -423,11 +425,11 @@ var setZoomPan = function() {
     var topMargin = (ds.numWindow / ds.numPos) * gl.canvas.width + indicatorHeight + 1;
     gl.translate(0, gl.canvas.height - topMargin - 2*screenOffset[0], 0);
     gl.translate(screenOffset[0], screenOffset[0], 0);
-    gl.scale(scale, -scale, 1);
+    gl.scale(1, -1, 1);
     gl.translate(offset[0], offset[1], 0);
   } else {
     gl.translate(screenOffset[0], screenOffset[1], 0);
-    gl.scale(scale, scale, 1);
+    gl.scale(1, 1, 1);
     gl.translate(offset[0], offset[1], 0);
   }
 };
