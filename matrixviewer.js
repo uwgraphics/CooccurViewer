@@ -782,7 +782,9 @@ function main() {
   loadShaderFromFiles("texture", "texture.vs", "overview.fs");
   
   var changeColormap = function() {
-    if ($("#useisoluminant").prop('checked')) {
+    if (!useBivariate) {
+      colorbrewerRampToTexture(colorbrewer.OrRd['9']);
+    } else if ($("#useisoluminant").prop('checked')) {
       if ($("#fixwhitecenter").prop('checked')) {
         colorbrewerRampToTexture(isoluminantRdBuFixedWhite);
       } else {
@@ -806,7 +808,7 @@ function main() {
 
   if (location.search == "?reads") {
     useBivariate = false;
-    $.get("readBreadthAll.csv", parseFile);
+    $.get("readBreadthAll.csv", function(data) { parseFile(data); });
   } else if (location.search == "?expected") {
     // jQuery looks too hard here; it's not implemented yet for ArrayBuffer 
     // xhr requests, which is an HTML5 phenomenon:
@@ -828,7 +830,7 @@ function main() {
     xhr.send(null);
   } else {
     useBivariate = false;
-    $.get("conjProb.csv", parseFile);
+    $.get("conjProb.csv", function(data) { parseFile(data); });
   }
   
   updateColormapChoice();
