@@ -10,8 +10,8 @@ canvas {
 	margin: 0 auto 20px;
 	border: 1px solid black;
 	display: block;
-	position: relative;
-	top: -802px;
+	position: absolute;
+	top: 0px;
 }
 
 .navbar-brand img {
@@ -24,12 +24,21 @@ canvas {
 	border: 1px solid black;
 }
 
+#super-zoom {
+	border: 1px solid #000;
+	height: 300px;
+	width: 300px;
+	z-index: -20;
+	position: absolute;
+	top: 0px;
+	left: 850px;
+}
+
 #canvas-labels {
-	position: relative;
+	position: absolute;
 	z-index: -10;
 	height: 800px;
 	width: 800px;
-	margin: 0 auto;
 }
 
 #canvas-labels div {
@@ -39,8 +48,7 @@ canvas {
 
 #label-xmin {
 	top: 807px;
-	left: -30px;
-	text-align: center;
+	left: -10px;
 }
 
 #label-xmax {
@@ -51,7 +59,9 @@ canvas {
 
 #label-ymin { 
 	top: 27px;
-	left: 810px;
+	left: 785px;
+	transform: rotate(90deg);
+	text-align: center;
 }
 
 #label-ymax {
