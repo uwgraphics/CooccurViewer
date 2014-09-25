@@ -240,10 +240,26 @@ var colorbrewerRampToTexture = function(colors) {
   colormapWidth = w;
 };
 
+// given an absolute position x, y (e.g. the actual positions of x and y; y is NOT
+// an index into the window), return the value from the data
+var getDataValueFromAbsolutePosition = function(x, y) {
+  // have to convert from absolute y to a window index;
+  // y = x corresponds to Math.floor(ds.numWindow / 2) + 1
+  var wIndex = y - x + (Math.floor(ds.numWindow / 2) + 1);
+  
+  // throw an error if the corresponding y value falls outside the loaded window
+  if (wIndex < 0 || wIndex >= ds.numWindow) {
+    console.log("tried to access out of bounds value, (%d, %d)", x, y);
+    return false;
+  }
+  
+  return ds.data[(x * ds.numWindow + wIndex) * 4 + 2];
+};
+
 // given a x position (position number) and a y value (window value),
 // get the color that represents this value
 var getColorForPosition = function(x, y) {
-  var curIndex = (x * ds.numWindow + y) * 4 + 3;
+  var curIndex = (x * ds.numWindow + y) * 4 + 2;
   
   var data = ds.data[curIndex];
   
@@ -694,6 +710,58 @@ var updateAxisLabels = function() {
   }
 };
 
+var populateSuperZoom = function() {
+  var sZContainer = document.getElementById("super-zoom");
+  var colors = colorbrewer.Pastel1['9'];
+  for (var i = 0; i < 9; i++) {
+    var newPixel = document.createElement("div");
+    newPixel.class = "pixel" + i;
+    newPixel.innerHTML = "--";
+    newPixel.style.backgroundColor = colors[i];
+    sZContainer.appendChild(newPixel);
+  }
+};
+
+var updateSuperZoom = function() {
+  var dataCoords = convertScreenToDataCoords();
+  
+  var sZContainer = document.getElementById("super-zoom");
+  for (var i = 0; i < 9; i++) {
+    var curPixel = sZContainer.children[i];
+    
+    var dx = (i % 3) - 1;
+    var dy = Math.floor(i / 3) - 1;
+    
+    var curVal = getDataValueFromAbsolutePosition(dataCoords[0] + dx, dataCoords[1] + dy);
+    
+    if (curVal === false) {
+      curPixel.style.backgroundColor = "#000";
+      curPixel.innerHTML = "--";
+    } else {
+      var c = getColorFromDataValue(curVal);
+      curPixel.style.backgroundColor = "rgb("+c[0]+","+c[1]+","+c[2]+")";
+      curPixel.innerHTML = curVal.toFixed(3);
+    }
+  }
+};
+
+// translate from panX, panY to data coordinates; what data is our mouse over?
+var convertScreenToDataCoords = function() {
+  // figure out how tall the overview is
+  var topMargin = (ds.numWindow / ds.numPos) * gl.canvas.width + indicatorHeight + 1;
+  topMargin = Math.floor(topMargin);
+  
+  var xmin = Math.floor(-screenOffset[0]);
+  var ymin = xmin;
+  
+  var xval = panX + xmin;
+  var yval = (gl.canvas.height - panY) - topMargin + ymin;
+  
+  console.log("looking at position (%d, %d)", xval, yval);
+  
+  return [xval, yval];
+};
+
 // ## Handlers for mouse-interaction
 // Handle panning the canvas.
 var panX, panY;
@@ -703,19 +771,25 @@ gl.onmousedown = function(e) {
   panX = e.x;
   panY = gl.canvas.height - e.y;
   
-  setCleanXInput(panX);
-  updateAxisLabels();
-  gl.ondraw();
+  if (e.which == 1) {
+    setCleanXInput(panX);
+    updateAxisLabels();
+    gl.ondraw();
+  } else {
+    e.preventDefault();
+    // updateSuperZoom();
+  }
 };
 
-
 gl.onmousemove = function(e) {
+  panX = e.x;
+  panY = gl.canvas.height - e.y;
+  
   if (drags(e)) {    
-    panX = e.x;
-    panY = gl.canvas.height - e.y;
-    
     setCleanXInput(panX);
     gl.ondraw();
+  } else if (dataReady && $("#dodiagonal").prop('checked')) {
+    updateSuperZoom();
   }
 };
 
@@ -832,6 +906,8 @@ function main() {
     useBivariate = false;
     $.get("conjProb.csv", function(data) { parseFile(data); });
   }
+  
+  populateSuperZoom();
   
   updateColormapChoice();
   gl.ondraw();

@@ -25,6 +25,7 @@ canvas {
 }
 
 #super-zoom {
+	box-sizing: content-box;
 	border: 1px solid #000;
 	height: 300px;
 	width: 300px;
@@ -32,6 +33,22 @@ canvas {
 	position: absolute;
 	top: 0px;
 	left: 850px;
+}
+
+#super-zoom div {
+	height: 100px;
+	width: 100px;
+	margin: 0;
+	padding: 0;
+	float: left;
+	text-align: center;
+	padding-top: 80px;
+	color: #fff;
+	text-shadow: 1px 1px 3px #666,
+     -1px -1px 0 #000,  
+      1px -1px 0 #000,
+      -1px 1px 0 #000,
+       1px 1px 0 #000;
 }
 
 #canvas-labels {
