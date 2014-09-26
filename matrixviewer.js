@@ -16,6 +16,7 @@ var textures = [];
 var overview, indicator, indicatorBackground;
 var indicatorWidth = 0;
 var indicatorHeight = 4;
+var topMargin;
 
 var useBivariate = false;
 var chosenColormap;
@@ -126,9 +127,6 @@ var parseFile = function(text, binary) {
     console.timeEnd("sending data to GPU");
     dataReady = true;
   }
-  
-  // once data is loaded, update the labels
-  updateAxisLabels();
   
   console.timeEnd("parsing file");
 };
@@ -249,7 +247,7 @@ var getDataValueFromAbsolutePosition = function(x, y) {
   
   // throw an error if the corresponding y value falls outside the loaded window
   if (wIndex < 0 || wIndex >= ds.numWindow) {
-    console.log("tried to access out of bounds value, (%d, %d)", x, y);
+    // console.log("tried to access out of bounds value, (%d, %d)", x, y);
     return false;
   }
   
@@ -417,6 +415,10 @@ var constructOverviewTexture = function() {
     colormapTexture.unbind(0);
   });
   
+  // compute how many y-pixels the overview + indicator takes up
+  topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
+  updateAxisLabels();
+  
   console.timeEnd("constructing overview texture using WebGL drawing");
 };
 
@@ -438,7 +440,6 @@ var setZoomPan = function() {
   // gl.rotate(-45, 0, 0, 1);
   if ($("#dodiagonal").prop('checked')) {
     // give an upper margin of 100 pixels
-    var topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
     gl.scale(1, -1, 1);    
     gl.translate(screenOffset[0], screenOffset[0] - gl.canvas.height + topMargin, 0);
     // gl.translate(-55, -55, 0);
@@ -699,7 +700,7 @@ var updateAxisLabels = function() {
   $("#label-xmax").html(spacify(xmax));
   if ($("#dodiagonal").prop('checked')) {
     var ymin = xmin;
-    var ymax = Math.floor(-screenOffset[0] + gl.canvas.height - (indicatorHeight + ds.numWindow / ds.numPos));
+    var ymax = ymin + gl.canvas.height - topMargin;
     
     $("#label-ymin").html(spacify(ymin));
     $("#label-ymax").html(spacify(ymax));
@@ -760,15 +761,15 @@ var updateSuperZoom = function() {
 // translate from panX, panY to data coordinates; what data is our mouse over?
 var convertScreenToDataCoords = function() {
   // figure out how tall the overview is
-  var topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
+  //var topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
   
   var xmin = Math.floor(-screenOffset[0]);
   var ymin = xmin;
   
-  var xval = panX + xmin;
-  var yval = (gl.canvas.height - panY) - topMargin + ymin;
+  var xval = panX + xmin + 1;
+  var yval = (gl.canvas.height - panY) - topMargin + ymin + 1;
   
-  console.log("looking at position (%d, %d)", xval, yval);
+  //console.log("looking at position (%d, %d)", xval, yval);
   
   return [xval, yval];
 };
@@ -782,7 +783,7 @@ gl.onmousedown = function(e) {
   panX = e.x;
   panY = gl.canvas.height - e.y;
   
-  if (e.which == 1) {
+  if (e.which == 1 && e.y <= topMargin) {
     setCleanXInput(panX);
     updateAxisLabels();
     gl.ondraw();
@@ -797,10 +798,20 @@ gl.onmousemove = function(e) {
   panY = gl.canvas.height - e.y;
   
   if (drags(e)) {    
-    setCleanXInput(panX);
-    gl.ondraw();
+    //setCleanXInput(panX);
+    //gl.ondraw();
   } else if (dataReady && $("#dodiagonal").prop('checked')) {
-    updateSuperZoom();
+    if (e.y <= topMargin) {
+      // blank out super-zoom
+      var superPixels = document.getElementById("super-zoom").children;
+      for (var i = 0; i < superPixels.length; i++) {
+        superPixels[i].style.backgroundColor = "#000";
+        superPixels[i].children[0].innerHTML = "--";
+        superPixels[i].children[1].innerHTML = "";
+      };
+    } else {
+      updateSuperZoom();
+    }
   }
 };
 
