@@ -44,11 +44,29 @@ canvas {
 	text-align: center;
 	padding-top: 80px;
 	color: #fff;
+	position: relative;
 	text-shadow: 1px 1px 3px #666,
      -1px -1px 0 #000,  
       1px -1px 0 #000,
       -1px 1px 0 #000,
        1px 1px 0 #000;
+}
+
+#super-zoom div>span {
+	text-align: center;
+	margin: 0 auto;
+	width: 100px;
+}
+
+#super-zoom span.coord {
+	font-size: 0.85em;
+	position: absolute;
+	top: 30px;
+	left: 0;
+}
+
+#super-zoom span.val {
+	/*margin-top:10px;*/
 }
 
 #canvas-labels {

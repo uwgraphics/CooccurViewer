@@ -715,10 +715,19 @@ var populateSuperZoom = function() {
   var colors = colorbrewer.Pastel1['9'];
   for (var i = 0; i < 9; i++) {
     var newPixel = document.createElement("div");
-    newPixel.class = "pixel" + i;
-    newPixel.innerHTML = "--";
+    newPixel.className = "pixel" + i;
     newPixel.style.backgroundColor = colors[i];
     sZContainer.appendChild(newPixel);
+    
+    var newValue = document.createElement("span");
+    newValue.className = "val";
+    newValue.innerHTML = "--";
+    newPixel.appendChild(newValue);
+    
+    var newCoord = document.createElement("span");
+    newCoord.className = "coord";
+    newCoord.innerHTML = "(0,0)";
+    newPixel.appendChild(newCoord);
   }
 };
 
@@ -732,15 +741,20 @@ var updateSuperZoom = function() {
     var dx = (i % 3) - 1;
     var dy = Math.floor(i / 3) - 1;
     
-    var curVal = getDataValueFromAbsolutePosition(dataCoords[0] + dx, dataCoords[1] + dy);
+    var x = dataCoords[0] + dx;
+    var y = dataCoords[1] + dy;
+    
+    var curVal = getDataValueFromAbsolutePosition(x, y);
     
     if (curVal === false) {
       curPixel.style.backgroundColor = "#000";
-      curPixel.innerHTML = "--";
+      curPixel.children[1].innerHTML = "";
+      curPixel.children[0].innerHTML = "--";
     } else {
       var c = getColorFromDataValue(curVal);
       curPixel.style.backgroundColor = "rgb("+c[0]+","+c[1]+","+c[2]+")";
-      curPixel.innerHTML = curVal.toFixed(3);
+      curPixel.children[1].innerHTML = "("+x+", "+y+")";
+      curPixel.children[0].innerHTML = curVal.toFixed(3);
     }
   }
 };
