@@ -245,7 +245,7 @@ var colorbrewerRampToTexture = function(colors) {
 var getDataValueFromAbsolutePosition = function(x, y) {
   // have to convert from absolute y to a window index;
   // y = x corresponds to Math.floor(ds.numWindow / 2) + 1
-  var wIndex = y - x + (Math.floor(ds.numWindow / 2) + 1);
+  var wIndex = x - y + (Math.floor(ds.numWindow / 2) + 1);
   
   // throw an error if the corresponding y value falls outside the loaded window
   if (wIndex < 0 || wIndex >= ds.numWindow) {
@@ -253,7 +253,7 @@ var getDataValueFromAbsolutePosition = function(x, y) {
     return false;
   }
   
-  return ds.data[(x * ds.numWindow + wIndex) * 4 + 2];
+  return ds.data[(y * ds.numWindow + wIndex) * 4 + 2];
 };
 
 // given a x position (position number) and a y value (window value),
@@ -438,15 +438,13 @@ var setZoomPan = function() {
   // gl.rotate(-45, 0, 0, 1);
   if ($("#dodiagonal").prop('checked')) {
     // give an upper margin of 100 pixels
-    var topMargin = (ds.numWindow / ds.numPos) * gl.canvas.width + indicatorHeight + 1;
-    gl.translate(0, gl.canvas.height - topMargin - 2*screenOffset[0], 0);
-    gl.translate(screenOffset[0], screenOffset[0], 0);
-    gl.scale(1, -1, 1);
-    gl.translate(offset[0], offset[1], 0);
+    var topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
+    gl.scale(1, -1, 1);    
+    gl.translate(screenOffset[0], screenOffset[0] - gl.canvas.height + topMargin, 0);
+    // gl.translate(-55, -55, 0);
   } else {
     gl.translate(screenOffset[0], screenOffset[1], 0);
     gl.scale(1, 1, 1);
-    gl.translate(offset[0], offset[1], 0);
   }
 };
 
@@ -753,7 +751,7 @@ var updateSuperZoom = function() {
     } else {
       var c = getColorFromDataValue(curVal);
       curPixel.style.backgroundColor = "rgb("+c[0]+","+c[1]+","+c[2]+")";
-      curPixel.children[1].innerHTML = "("+x+", "+y+")";
+      curPixel.children[1].innerHTML = "("+x+", "+(y-1)+")";
       curPixel.children[0].innerHTML = curVal.toFixed(3);
     }
   }
@@ -762,8 +760,7 @@ var updateSuperZoom = function() {
 // translate from panX, panY to data coordinates; what data is our mouse over?
 var convertScreenToDataCoords = function() {
   // figure out how tall the overview is
-  var topMargin = (ds.numWindow / ds.numPos) * gl.canvas.width + indicatorHeight + 1;
-  topMargin = Math.floor(topMargin);
+  var topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
   
   var xmin = Math.floor(-screenOffset[0]);
   var ymin = xmin;
