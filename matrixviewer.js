@@ -599,6 +599,7 @@ gl.ondraw = function() {
     colormapTexture.bind(0);
     var bivar = useBivariate ? 1 : 0;
     var darken = $("#dodarkening").prop('checked') ? 1 : 0;
+    var binL = $("#dolightbinning").prop('checked') ? 1 : 0;
     cbPtShader.uniforms({
       pointSize: 1,
       windowSize: ds.numWindow,
@@ -607,6 +608,7 @@ gl.ondraw = function() {
       maxDepth: ds.maxDepth,
       bivariate: bivar,
       darkening: darken,
+      binLight: binL,
       rampTexWidth: colormapWidth,
       numSteps: chosenColormap.length,
       colorRamp: 0
@@ -894,6 +896,7 @@ function main() {
   
   $("#dodiagonal").change(gl.ondraw);
   $("#dodarkening").change(gl.ondraw);
+  $("#dolightbinning").change(gl.ondraw);
   $("#useisoluminant").change(changeColormap);
   $("#fixwhitecenter").change(changeColormap);
   $("#usecolorbrewer").change(function() {

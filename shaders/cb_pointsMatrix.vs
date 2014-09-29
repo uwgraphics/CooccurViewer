@@ -8,6 +8,7 @@ uniform float maxDepth;
 
 uniform int bivariate;
 uniform int darkening;
+uniform int binLight;
 
 uniform float rampTexWidth;
 uniform float numSteps;
@@ -139,8 +140,15 @@ vec4 getColorFromColorRamp() {
 		return texture2D(colorRamp, vec2(xCoord, yCoord) + vec2(0.03));
 	} else {	
 		// try changing the luminance only
-		float dimFactor = position.w / maxDepth;
 		vec3 labColor = LABtoLCH(RGBtoLAB(texture2D(colorRamp, vec2(xCoord, yCoord) + vec2(0.03)).rgb));
+		
+		// bin the darkening factor; split into 6 slots:
+		// [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]
+		float dimFactor = position.w / maxDepth;
+		
+		if (binLight == 1) {
+			dimFactor = 0.1 * floor(dimFactor * 11.0);
+		}
 		
 		// darkening (works)
 		if (darkening == 1) {
