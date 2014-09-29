@@ -69,6 +69,17 @@ canvas {
 	/*margin-top:10px;*/
 }
 
+svg#legend {
+	box-sizing: content-box;
+	border: 1px solid #000;
+	height: 200px;
+	width: 200px;
+	z-index: -20;
+	position: absolute;
+	top: 450px;
+	left: 900px;
+}
+
 #canvas-labels {
 	position: absolute;
 	z-index: -10;

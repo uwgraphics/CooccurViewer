@@ -222,6 +222,9 @@ var colorbrewerRampToBuffer = function(colors, width) {
 
 // creates a texture with the specified colorbrewer ramp
 var colorbrewerRampToTexture = function(colors) {
+  // set the current colorbrewer ramp to the given colors
+  chosenColormap = colors;
+
   var w = Math.ceil(Math.sqrt(colors.length));
   colormapTexture = new GL.Texture(w, w, {filter: gl.NEAREST, wrap: gl.CLAMP_TO_EDGE});
   
@@ -234,6 +237,9 @@ var colorbrewerRampToTexture = function(colors) {
   colormapTexture.bind(0);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, w, 0, gl.RGBA, gl.UNSIGNED_BYTE, colormapRGBA);
   colormapTexture.unbind(0);
+  
+  // this seems a good of a place as any to drop this
+  updateLegend();
 
   colormapWidth = w;
 };
@@ -758,6 +764,57 @@ var updateSuperZoom = function() {
       curPixel.children[0].innerHTML = curVal.toFixed(3);
     }
   }
+};
+
+// update legend with the current colorramp (uses D3.js)
+var updateLegend = function() {
+  // the data we're using is the 'chosenColormap'; assume it's been populated by this point
+  
+  var svgWidth = 200, svgHeight = 200;
+  var svg = d3.select("#legend").attr('width', svgWidth).attr('height', svgHeight);
+  
+  var margin = 2;
+  var effWidth = svgWidth - margin;
+  var effHeight = svgHeight - margin;
+  
+  var numLightBins = 11;  
+  var scales = [];
+      
+  // remove any existing color key from the svg
+  svg.selectAll('.swatch').remove();
+  
+  var swatchGroup = svg.selectAll('.swatch').data(chosenColormap).enter()
+    .append('g')
+      .attr('class', 'swatch')
+      .attr('transform', function(d, i) {
+        var x = i * (effWidth / chosenColormap.length) + margin;
+        return "translate(" + x + "," + margin + ")";
+      });
+     
+  // do the first level
+  swatchGroup.append('rect')
+    .attr('width', effWidth / chosenColormap.length - margin)
+    .attr('height', effHeight / numLightBins - margin)
+    .attr('y', 0)
+    .attr('x', 0)
+    .attr('fill', function(d, i) { 
+      scales[i] = d3.scale.linear()
+        .range([d, "white"])
+        .interpolate(d3.interpolateLab);
+      return d; 
+    });
+    
+  // do the second level
+  for (var n = 1; n < numLightBins; n++) {  
+    swatchGroup.append('rect')
+      .attr('width', effWidth / chosenColormap.length - margin)
+      .attr('height', effHeight / numLightBins - margin)
+      .attr('y', n * effHeight / numLightBins)
+      .attr('x', 0)
+      .attr('fill', function(d, i) {
+        return scales[i](0.1 * n); 
+      });
+    }
 };
 
 // translate from panX, panY to data coordinates; what data is our mouse over?
