@@ -798,8 +798,9 @@ var updateLegend = function() {
     .attr('y', 0)
     .attr('x', 0)
     .attr('fill', function(d, i) { 
+      var mixColor = $("#dodarkening").prop('checked') ? "black" : "white";
       scales[i] = d3.scale.linear()
-        .range([d, "white"])
+        .range([d, mixColor])
         .interpolate(d3.interpolateLab);
       return d; 
     });
@@ -822,13 +823,17 @@ var convertScreenToDataCoords = function() {
   // figure out how tall the overview is
   //var topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
   
-  var xmin = Math.floor(-screenOffset[0]);
-  var ymin = xmin;
-  
-  var xval = panX + xmin + 1;
-  var yval = (gl.canvas.height - panY) - topMargin + ymin + 1;
-  
-  //console.log("looking at position (%d, %d)", xval, yval);
+  var xval, yval;
+  if ($("#dodiagonal").prop('checked')) {
+    var xmin = Math.floor(-screenOffset[0]);
+    var ymin = xmin;
+    
+    xval = panX + xmin + 1;
+    yval = (gl.canvas.height - panY) - topMargin + ymin + 1;
+  } else { // TODO: implement
+    xval = -1;
+    yval = -1;
+  }
   
   return [xval, yval];
 };
@@ -952,7 +957,12 @@ function main() {
   };
   
   $("#dodiagonal").change(gl.ondraw);
-  $("#dodarkening").change(gl.ondraw);
+  
+  $("#dodarkening").change(function() {
+    updateLegend();
+    gl.ondraw();
+  });
+  
   $("#dolightbinning").change(gl.ondraw);
   $("#useisoluminant").change(changeColormap);
   $("#fixwhitecenter").change(changeColormap);
