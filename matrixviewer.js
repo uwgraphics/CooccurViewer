@@ -286,7 +286,7 @@ var getColorFromDataValue = function(value) {
       cbIndex = Math.floor(chosenColormap.length / 2);
       //console.log("mid value");
     } else
-      cbIndex = Math.floor((value - ds.minVal) / (ds.maxVal - ds.minVal) * (chosenColormap.length - 2));
+      cbIndex = Math.floor((value - ds.minVal) / (ds.maxVal - ds.minVal) * (chosenColormap.length - 2)) + 1;
     
     // the stride is 4!
     cbIndex *= 4;
