@@ -122,12 +122,12 @@ vec3 LABtoRGB(vec3 lab, bool clamp){
 vec4 getColorFromColorRamp() {
 	// figure out where in the ramp we are 
 	float cbIndex = 0.0;
-	if (position.z <= minVal && bivariate == 0) {
+	if (position.z <= minVal) {
 		cbIndex = 0.0;
-	} else if (position.z >= maxVal && bivariate == 0) {
+	} else if (position.z >= maxVal) {
 		cbIndex = numSteps - 1.0;
 	} else if (position.z == 0.0 && bivariate == 1) {
-		cbIndex = floor(numSteps / 2.0);
+		cbIndex = floor(numSteps / 2.0) + 1.0;
 	} else {
 		cbIndex = floor(((position.z - minVal) / (maxVal - minVal)) * (numSteps - 2.0)) + 1.0;
 	}

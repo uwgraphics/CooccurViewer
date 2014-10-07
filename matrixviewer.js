@@ -199,10 +199,11 @@ var debugImg = function() {
   document.getElementById("img-container").appendChild(img);
 };
 
+/*
 var updateColormapChoice = function() {
   //chosenColormap = useBivariate ? colorbrewer.RdBu['11'] : colorbrewer.OrRd['9'];
   chosenColormap = useBivariate ? isoluminantRdBu : colorbrewer.OrRd['9'];
-};
+};*/
 
 // construct a Uint8 buffer for all hex-encoded colors given a specified
 // colorbrewer ramp.
@@ -221,7 +222,12 @@ var colorbrewerRampToBuffer = function(colors, width) {
 };
 
 // creates a texture with the specified colorbrewer ramp
-var colorbrewerRampToTexture = function(colors) {
+var colorbrewerRampToTexture = function(colors, doReverse) {
+  // if requested to do a reverse, make a copy and reverse that
+  if (doReverse) {
+    colors = Array.prototype.slice.call(colors).reverse();
+  }
+  
   // set the current colorbrewer ramp to the given colors
   chosenColormap = colors;
 
@@ -278,9 +284,9 @@ var getColorFromDataValue = function(value) {
   if ($("#usecolorbrewer").prop('checked')) {
     // clamp min and max to lowest and highest ramp positions, respectively.
     var cbIndex = 0;
-    if (value <= ds.minVal && !useBivariate)
+    if (value <= ds.minVal)
       cbIndex = 0;
-    else if (value >= ds.maxVal && !useBivariate)
+    else if (value >= ds.maxVal)
       cbIndex = chosenColormap.length - 1;
     else if (value == 0 && useBivariate) {
       cbIndex = Math.floor(chosenColormap.length / 2);
@@ -946,12 +952,12 @@ function main() {
       colorbrewerRampToTexture(colorbrewer.OrRd['9']);
     } else if ($("#useisoluminant").prop('checked')) {
       if ($("#fixwhitecenter").prop('checked')) {
-        colorbrewerRampToTexture(isoluminantRdBuFixedWhite);
+        colorbrewerRampToTexture(isoluminantRdBuFixedWhite, true);
       } else {
-        colorbrewerRampToTexture(isoluminantRdBu);
+        colorbrewerRampToTexture(isoluminantRdBu, true);
       }
     } else {
-      colorbrewerRampToTexture(colorbrewer.RdBu['11']);
+      colorbrewerRampToTexture(colorbrewer.RdBu['11'], true);
     }
     gl.ondraw();
   };
@@ -1001,6 +1007,6 @@ function main() {
   
   populateSuperZoom();
   
-  updateColormapChoice();
+  changeColormap();
   gl.ondraw();
 };
