@@ -784,7 +784,7 @@ var updateSuperZoom = function() {
     } else {
       var c = getColorFromDataValue(curVal);
       curPixel.style.backgroundColor = "rgb("+c[0]+","+c[1]+","+c[2]+")";
-      curPixel.children[1].innerHTML = "("+x+", "+(y-1)+")";
+      curPixel.children[1].innerHTML = "("+x+", "+y+")";
       curPixel.children[0].innerHTML = curVal.toFixed(3);
     }
   }
