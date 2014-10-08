@@ -8,6 +8,7 @@ uniform float maxDepth;
 
 uniform int bivariate;
 uniform int darkening;
+uniform int confidence;
 uniform int binLight;
 
 uniform float rampTexWidth;
@@ -127,7 +128,7 @@ vec4 getColorFromColorRamp() {
 	} else if (position.z >= maxVal) {
 		cbIndex = numSteps - 1.0;
 	} else if (position.z == 0.0 && bivariate == 1) {
-		cbIndex = floor(numSteps / 2.0) + 1.0;
+		cbIndex = floor(numSteps / 2.0);
 	} else {
 		cbIndex = floor(((position.z - minVal) / (maxVal - minVal)) * (numSteps - 2.0)) + 1.0;
 	}
@@ -150,15 +151,15 @@ vec4 getColorFromColorRamp() {
 			dimFactor = 0.1 * floor(dimFactor * 11.0);
 		}
 		
+		if (confidence == 0) {
+			dimFactor = 1.0;
+		}
+		
 		// darkening (works)
 		if (darkening == 1) {
 			labColor.x = labColor.x * dimFactor;
 		} else {
 			labColor = mix(labColor, vec3(100.0, 0.0, 0.0), 1.0 - dimFactor);
-		}
-		
-		if (false) {
-			labColor.y = labColor.y * pow(1.0, dimFactor);
 		}
 		
 		return vec4(LABtoRGB(LCHtoLAB(labColor), true), 1.0);	

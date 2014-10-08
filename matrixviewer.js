@@ -199,6 +199,22 @@ var debugImg = function() {
   document.getElementById("img-container").appendChild(img);
 };
 
+var debugPoint = function(x, y) {
+  var wIndex = x - y + Math.floor(ds.numWindow / 2);
+  
+  // throw an error if the corresponding y value falls outside the loaded window
+  if (wIndex < 0 || wIndex >= ds.numWindow) {
+    // console.log("tried to access out of bounds value, (%d, %d)", x, y);
+    return false;
+  }
+  
+  console.log("got wIndex: %d", wIndex);
+  
+  var curIndex = (y * ds.numWindow + wIndex) * 4;
+  
+  return [ds.data[curIndex], ds.data[curIndex + 1], ds.data[curIndex + 2], ds.data[curIndex + 3]];
+};
+
 /*
 var updateColormapChoice = function() {
   //chosenColormap = useBivariate ? colorbrewer.RdBu['11'] : colorbrewer.OrRd['9'];
@@ -254,8 +270,8 @@ var colorbrewerRampToTexture = function(colors, doReverse) {
 // an index into the window), return the value from the data
 var getDataValueFromAbsolutePosition = function(x, y) {
   // have to convert from absolute y to a window index;
-  // y = x corresponds to Math.floor(ds.numWindow / 2) + 1
-  var wIndex = x - y + (Math.floor(ds.numWindow / 2) + 1);
+  // y = x corresponds to Math.floor(ds.numWindow / 2)
+  var wIndex = x - y + Math.floor(ds.numWindow / 2);
   
   // throw an error if the corresponding y value falls outside the loaded window
   if (wIndex < 0 || wIndex >= ds.numWindow) {
@@ -611,15 +627,17 @@ gl.ondraw = function() {
     colormapTexture.bind(0);
     var bivar = useBivariate ? 1 : 0;
     var darken = $("#dodarkening").prop('checked') ? 1 : 0;
+    var confid = $("#doconfidence").prop('checked') ? 1 : 0;
     var binL = $("#dolightbinning").prop('checked') ? 1 : 0;
     cbPtShader.uniforms({
       pointSize: 1,
       windowSize: ds.numWindow,
       maxVal: ds.maxVal,
-      minVal: 0,
+      minVal: ds.minVal,
       maxDepth: ds.maxDepth,
       bivariate: bivar,
       darkening: darken,
+      confidence: confid,
       binLight: binL,
       rampTexWidth: colormapWidth,
       numSteps: chosenColormap.length,
@@ -772,6 +790,26 @@ var updateSuperZoom = function() {
   }
 };
 
+// translate from panX, panY to data coordinates; what data is our mouse over?
+var convertScreenToDataCoords = function() {
+  // figure out how tall the overview is
+  //var topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
+  
+  var xval, yval;
+  if ($("#dodiagonal").prop('checked')) {
+    var xmin = Math.floor(-screenOffset[0]);
+    var ymin = xmin;
+    
+    xval = panX + xmin;
+    yval = (gl.canvas.height - panY) - topMargin + ymin;
+  } else { // TODO: implement
+    xval = -1;
+    yval = -1;
+  }
+  
+  return [xval, yval];
+};
+
 // update legend with the current colorramp (uses D3.js)
 var updateLegend = function() {
   // the data we're using is the 'chosenColormap'; assume it's been populated by this point
@@ -822,26 +860,6 @@ var updateLegend = function() {
         return scales[i](0.1 * n); 
       });
     }
-};
-
-// translate from panX, panY to data coordinates; what data is our mouse over?
-var convertScreenToDataCoords = function() {
-  // figure out how tall the overview is
-  //var topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
-  
-  var xval, yval;
-  if ($("#dodiagonal").prop('checked')) {
-    var xmin = Math.floor(-screenOffset[0]);
-    var ymin = xmin;
-    
-    xval = panX + xmin + 1;
-    yval = (gl.canvas.height - panY) - topMargin + ymin + 1;
-  } else { // TODO: implement
-    xval = -1;
-    yval = -1;
-  }
-  
-  return [xval, yval];
 };
 
 // ## Handlers for mouse-interaction
@@ -969,6 +987,7 @@ function main() {
     gl.ondraw();
   });
   
+  $("#doconfidence").change(gl.ondraw);
   $("#dolightbinning").change(gl.ondraw);
   $("#useisoluminant").change(changeColormap);
   $("#fixwhitecenter").change(changeColormap);
