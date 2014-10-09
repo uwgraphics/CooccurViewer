@@ -76,8 +76,18 @@ svg#legend {
 	width: 200px;
 	z-index: -20;
 	position: absolute;
-	top: 450px;
+	top: 350px;
 	left: 900px;
+}
+
+#chooser {
+	border: 1px solid #000;
+	height: 150px;
+	width: 300px;
+	position: absolute;
+	left: 850px;
+	top: 575px;
+	padding: 15px;
 }
 
 #canvas-labels {

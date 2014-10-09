@@ -27,6 +27,10 @@ var colormapWidth = 0;
 var ds = {
   data: [],
   depth: [],
+  definition: [],
+  metrics: [],
+  buffers: [],
+  bounds: {},
   buf: 0,
   numWindow: 0,
   numPos: 0,
@@ -129,6 +133,114 @@ var parseFile = function(text, binary) {
   }
   
   console.timeEnd("parsing file");
+};
+
+// general function to read in binary data
+// assumes three header ints:
+// <window_size> <num_pos> <num-values-per-datapoint>
+var loadBinaryData = function(data, name, isDefinition) {
+  var dv = new DataView(data);
+  
+  var thisNumWindow = dv.getInt32(0);
+  var thisNumPos = dv.getInt32(4);
+  var thisSpacing = dv.getInt32(8);
+  
+  // do a bunch of error checking (also serves as documentation)
+  if (ds.numPos != thisNumPos) {
+    console.warn("number of lines in file %s does not match data: expected %d, depth had %d lines", name, ds.numWindow, thisNumWindow);
+  }
+  
+  if (ds.numWindow != thisNumWindow) {
+    console.warn("number of items in a window does not match data in %s: expected %d, depth had a window size of %d", name, ds.numWindow, thisNumWindow);
+  }
+  
+  var expectedBytes = (thisNumWindow * thisNumPos * thisSpacing) * 4 + 12;
+  if (dv.byteLength !== expectedBytes) {
+    console.warn("expected to find %d bytes of data from header, found %d instead. unusual truncation may occur", dv.byteLength, expectedBytes);
+    
+    if (dv.byteLength < expectedBytes) {
+      console.error("missing data designated by header, please check the file. aborting.");
+      return false;
+    }
+  }
+  
+  var windowOffset = (ds.numWindow - thisNumWindow) / 2;
+  var numPositions = Math.min(ds.numPos, thisNumPos);
+  
+  if (isDefinition) {
+    // also include x and y coordinates of current point
+    if (thisSpacing > 2) {
+      console.error("cannot create a dataset definition from a file that contains >2 datum per element (gl.buffer can only support a vec4 at maximum)");
+      return false;
+    }
+    thisSpacing += 2;
+    
+    ds.definition = new Float32Array(ds.numPos * ds.numWindow * thisSpacing);
+    
+    for (var i = 0, offset = 12; i < numPositions; i++) {
+      for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
+        var curIndex = (i * ds.numWindow + j) * thisSpacing;
+        ds.definition[curIndex] = i;
+        ds.definition[curIndex + 1] = j;
+        
+        for (var n = 0; n < (thisSpacing - 2); n++) {
+          ds.definition[curIndex + 2 + n] = dv.getFloat32(offset);
+          offset += 4;
+        }
+      }
+    }
+  } else {
+    ds.metrics[name] = new Float32Array(ds.numPos * ds.numWindow * thisSpacing);
+  
+    for (var i = 0, offset = 12; i < numPositions; i++) {
+      for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
+        var curIndex = (i * ds.numWindow + j) * thisSpacing;
+        for(var n = 0; n < thisSpacing; n++) {
+          ds.metrics[name][curIndex + n] = dv.getFloat32(offset);
+          offset += 4;
+        }
+      }
+    }
+  }
+  
+  var bufLoc = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
+  bufLoc.buffer = gl.createBuffer();
+  bufLoc.buffer.length = ds.numPos * ds.numWindow * thisSpacing;
+  bufLoc.buffer.spacing = thisSpacing;
+  
+  gl.bindBuffer(bufLoc.target, bufLoc.buffer);
+  
+  if (isDefinition) {
+    gl.bufferData(bufLoc.target, ds.definition, gl.STATIC_DRAW);
+    ds.buf = bufLoc;
+  } else {
+    gl.bufferData(bufLoc.target, ds.metrics[name], gl.STATIC_DRAW);
+    ds.buffers[name] = bufLoc;
+  }
+  
+  return true;
+};
+
+// assumes we're loading in a binary read depth file
+// header is three int32: <window_size> <num_pos> <num-values-per-datapoint>
+var loadDatasetDefinition = function(depth, name) {
+  var dv = new DataView(depth);
+  
+  ds.numWindow = dv.getInt32(0);
+  ds.numPos = dv.getInt32(4);
+  var spacing = dv.getInt32(8);
+  
+  // do some really simple error checking.  if there's anything wrong with this file,
+  // other files will probably have similar issues
+  var expectedBytes = (ds.numWindow * ds.numPos * spacing) * 4 + 12;
+  if (dv.byteLength !== expectedBytes) {
+    console.error("Size mismatch... expected %d window x %d positions x %d elements + 12 header bytes = %d bytes, found %d instead", ds.numWindow, ds.numPos, spacing, expectedBytes, dv.byteLength);
+    return;
+  }
+  
+  if (!loadBinaryData(depth, "main", true)) {
+    console.error("Error loading data definition from file %s", name);
+  }
 };
 
 // adds read depth information to the data parsed
@@ -1019,9 +1131,29 @@ function main() {
     
     useBivariate = true;
     xhr.send(null);
-  } else {
+  } else if (location.search == "?conj") {
     useBivariate = false;
     $.get("conjProb.csv", function(data) { parseFile(data); });
+  } else {
+    // use the new way of loading/reading files
+    var xhr = new XMLHttpRequest();
+    var fileName = 'readBreadth.dat';
+    xhr.open('GET', fileName, true);
+    xhr.responseType = 'arraybuffer';
+    
+    xhr.addEventListener('load', function() {
+      if (xhr.status == 200) {
+        loadDatasetDefinition(xhr.response, fileName);
+        
+        // then make another xhr request for the selected metrics
+      } else {
+        console.warning("failed to load requested file (status: %d)", xhr.status);
+        console.trace();
+      }
+    });
+    
+    useBivariate = true;
+    xhr.send(null);
   }
   
   populateSuperZoom();
