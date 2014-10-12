@@ -827,7 +827,8 @@ var reloadShader = function(name, vs, fs) {
 
 function main() {
   gl.canvas.id = "webglcanvas";
-  document.getElementById("canvas-container").appendChild(gl.canvas);
+  var canvasContainer = document.getElementById("canvas-container");
+  canvasContainer.insertBefore(gl.canvas, canvasContainer.children[0]);
   
   // set up the viewport
   resizeCanvas();
