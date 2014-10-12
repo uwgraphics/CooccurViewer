@@ -7,7 +7,6 @@ var isoluminantRdBuFixedWhite = ["#EC7B8B", "#FF696B", "#F07C68", "#D38D6D", "#B
 
 window.onload = main;
 
-var dataReady = false;
 var timer = null;
 
 var shaders = [];
@@ -24,14 +23,15 @@ var colormapTexture;
 var colormapWidth = 0;
 
 var ds = {
-  metrics: [],
-  buffers: [],
-  bounds: [],
-  ready: [],
-  numWindow: 0,
-  numPos: 0,
-  curMetric: "",
-  curAttenuation: ""
+  metrics: [],       // holds the raw dat for all metrics
+  buffers: [],       // holds the WebGL buffers for all loaded data 
+                     // (ds.buffers['pos'] is a special position buffer)
+  bounds: [],        // holds the bounds for each metric, indexed by the n-th element
+  ready: [],         // boolean value: is the request metric is fully loaded?
+  numWindow: 0,      // the number of window positions in this dataset
+  numPos: 0,         // the number of base positions in this dataset
+  curMetric: "",     // the current metric drawn
+  curAttenuation: "" // the current attentuation metric
 };
 
 var screenOffset = [0, 0];
@@ -53,11 +53,11 @@ var loadBinaryData = function(data, name, isDefinition) {
   var thisSpacing = dv.getInt32(8);
   
   // do a bunch of error checking (also serves as documentation)
-  if (ds.numPos != thisNumPos) {
+  if (ds.numPos && ds.numPos != thisNumPos) {
     console.warn("number of lines in file %s does not match data: expected %d, depth had %d lines", name, ds.numWindow, thisNumWindow);
   }
   
-  if (ds.numWindow != thisNumWindow) {
+  if (ds.numWindow && ds.numWindow != thisNumWindow) {
     console.warn("number of items in a window does not match data in %s: expected %d, depth had a window size of %d", name, ds.numWindow, thisNumWindow);
   }
   
@@ -153,22 +153,16 @@ var debugPoint = function(x, y) {
   
   console.log("got wIndex: %d", wIndex);
   
-  var curSpacing = ds.buffer[ds.curMetric].buffer.spacing;
+  var curSpacing = ds.buffers[ds.curMetric].buffer.spacing;
   var curIndex = (y * ds.numWindow + wIndex) * curSpacing;
   
   var ret = [];
   for (var i = 0; i < curSpacing; i++) {
-    ret[i] = ds.metric[ds.curMetric][curIndex + i];
+    ret[i] = ds.metrics[ds.curMetric][curIndex + i];
   }
   
   return ret;
 };
-
-/*
-var updateColormapChoice = function() {
-  //chosenColormap = useBivariate ? colorbrewer.RdBu['11'] : colorbrewer.OrRd['9'];
-  chosenColormap = useBivariate ? isoluminantRdBu : colorbrewer.OrRd['9'];
-};*/
 
 // construct a Uint8 buffer for all hex-encoded colors given a specified
 // colorbrewer ramp.
@@ -231,8 +225,8 @@ var getDataValueFromAbsolutePosition = function(x, y, n) {
     return false;
   }
   
-  var curData = ds.metric[ds.curMetric];
-  var curSpacing = ds.buffer[ds.curMetric].buffer.spacing;
+  var curData = ds.metrics[ds.curMetric];
+  var curSpacing = ds.buffers[ds.curMetric].buffer.spacing;
   
   return curData[(y * ds.numWindow + wIndex) * curSpacing + n];
 };
@@ -241,10 +235,10 @@ var getDataValueFromAbsolutePosition = function(x, y, n) {
 // the n-th value (defaults to 0), get the color that represents the n-th value
 var getColorForPosition = function(x, y, n) {
   n = n || 0;
-  var curSpacing = ds.buffer[ds.curMetric].buffer.spacing;
+  var curSpacing = ds.buffers[ds.curMetric].buffer.spacing;
   var curIndex = (x * ds.numWindow + y) * curSpacing + n;
   
-  var data = ds.metric[ds.curMetric][curIndex];
+  var data = ds.metrics[ds.curMetric][curIndex];
   
   return getColorFromDataValue(data);  
 }
@@ -256,16 +250,19 @@ var getColorFromDataValue = function(value) {
   
   if ($("#usecolorbrewer").prop('checked')) {
     // clamp min and max to lowest and highest ramp positions, respectively.
+    var curMin = ds.bounds[ds.curMetric][0][0];
+    var curMax = ds.bounds[ds.curMetric][0][1];
+    
     var cbIndex = 0;
-    if (value <= ds.minVal)
+    if (value <= curMin)
       cbIndex = 0;
-    else if (value >= ds.maxVal)
+    else if (value >= curMax)
       cbIndex = chosenColormap.length - 1;
     else if (value == 0 && useBivariate) {
       cbIndex = Math.floor(chosenColormap.length / 2);
       //console.log("mid value");
     } else
-      cbIndex = Math.floor((value - ds.minVal) / (ds.maxVal - ds.minVal) * (chosenColormap.length - 2)) + 1;
+      cbIndex = Math.floor((value - curMin) / (curMax - curMin) * (chosenColormap.length - 2)) + 1;
     
     // the stride is 4!
     cbIndex *= 4;
@@ -415,12 +412,7 @@ var createTextures = function() {
   // create the colorbrewer ramp texture so the shader can access values
   colorbrewerRampToTexture(chosenColormap);
   
-  // try rendering from an image
-  //textures['full'] = GL.Texture.fromImage(document.getElementById("bmpimg"), defaultOpts);
-  //overviewToTexture();
-  //constructOverviewTexture();
-  
-  // fix plane to the dimensions of the large ds.imgData texture
+  // size the overview rectangle to not skew overview data
   overview = new GL.Mesh.plane();
   
   y_min = 1 - ((ds.numWindow / ds.numPos) * 2);
@@ -685,10 +677,8 @@ var updateSuperZoom = function() {
 
 // translate from panX, panY to data coordinates; what data is our mouse over?
 var convertScreenToDataCoords = function() {
-  // figure out how tall the overview is
-  //var topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
-  
   var xval, yval;
+
   if ($("#dodiagonal").prop('checked')) {
     var xmin = Math.floor(-screenOffset[0]);
     var ymin = xmin;
@@ -768,20 +758,18 @@ gl.onmousedown = function(e) {
     setCleanXInput(panX);
     updateAxisLabels();
     gl.ondraw();
-  } else {
-    e.preventDefault();
-    // updateSuperZoom();
-  }
+  } 
 };
 
 gl.onmousemove = function(e) {
   panX = e.x;
   panY = gl.canvas.height - e.y;
   
+  console.log("mouse at %d, %d", panX, panY);
+  
   if (drags(e)) {    
-    //setCleanXInput(panX);
-    //gl.ondraw();
-  } else if (dataReady && $("#dodiagonal").prop('checked')) {
+    console.log("dragging at %d, %d", panX, panY);
+  } else if (ds.ready[ds.curMetric] && $("#dodiagonal").prop('checked')) {
     if (e.y <= topMargin) {
       // blank out super-zoom
       var superPixels = document.getElementById("super-zoom").children;
@@ -889,54 +877,6 @@ function main() {
     overviewToTexture();
     gl.ondraw();
   });
-
-  /*
-  if (location.search == "?reads") {
-    useBivariate = false;
-    $.get("readBreadthAll.csv", function(data) { parseFile(data); });
-  } else if (location.search == "?expected") {
-    // jQuery looks too hard here; it's not implemented yet for ArrayBuffer 
-    // xhr requests, which is an HTML5 phenomenon:
-    // http://www.artandlogic.com/blog/2013/11/jquery-ajax-blobs-and-array-buffers/
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', "conjProbDiff.dat", true);
-    xhr.responseType = 'arraybuffer';
-    
-    xhr.addEventListener('load', function() {
-      if (xhr.status == 200) {
-        parseFile(xhr.response, true);
-      } else {
-        console.warning("failed to load requested file (status: %d)", xhr.status);
-        console.trace();
-      }
-    });
-    
-    useBivariate = true;
-    xhr.send(null);
-  } else if (location.search == "?conj") {
-    useBivariate = false;
-    $.get("conjProb.csv", function(data) { parseFile(data); });
-  } else {
-    // use the new way of loading/reading files
-    var xhr = new XMLHttpRequest();
-    var fileName = 'readBreadth.dat';
-    xhr.open('GET', fileName, true);
-    xhr.responseType = 'arraybuffer';
-    
-    xhr.addEventListener('load', function() {
-      if (xhr.status == 200) {
-        loadDatasetDefinition(xhr.response, fileName);
-        
-        // then make another xhr request for the selected metrics
-      } else {
-        console.warning("failed to load requested file (status: %d)", xhr.status);
-        console.trace();
-      }
-    });
-    
-    useBivariate = false;
-    xhr.send(null);
-  }*/
   
   var makeBinaryFileRequest = function(filename, name) {
     // if a specific name is given, use it; otherwise just use the filename 

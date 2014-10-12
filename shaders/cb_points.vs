@@ -1,10 +1,12 @@
-attribute vec4 position;
+attribute vec2 pos;
+attribute float metric;
+attribute float atten;
 
 uniform float pointSize;
 uniform float windowSize;
 uniform float minVal;
 uniform float maxVal;
-uniform float maxDepth;
+uniform float maxAtten;
 
 uniform int bivariate;
 uniform int darkening;
@@ -122,14 +124,14 @@ vec3 LABtoRGB(vec3 lab, bool clamp){
 vec4 getColorFromColorRamp() {
 	// figure out where in the ramp we are 
 	float cbIndex = 0.0;
-	if (position.z <= minVal) {
+	if (metric <= minVal) {
 		cbIndex = 0.0;
-	} else if (position.z >= maxVal) {
+	} else if (metric >= maxVal) {
 		cbIndex = numSteps - 1.0;
-	} else if (position.z == 0.0 && bivariate == 1) {
+	} else if (metric == 0.0 && bivariate == 1) {
 		cbIndex = floor(numSteps / 2.0) + 1.0;
 	} else {
-		cbIndex = floor(((position.z - minVal) / (maxVal - minVal)) * (numSteps - 2.0)) + 1.0;
+		cbIndex = floor(((metric - minVal) / (maxVal - minVal)) * (numSteps - 2.0)) + 1.0;
 	}
 	
 	// get the color from the texture (clamp to range [0,1])
@@ -144,7 +146,7 @@ vec4 getColorFromColorRamp() {
 		
 		// bin the darkening factor; split into 6 slots:
 		// [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]
-		float dimFactor = position.w / maxDepth;
+		float dimFactor = atten / maxAtten;
 		
 		if (binLight == 1) {
 			dimFactor = 0.1 * floor(dimFactor * 11.0);
@@ -166,7 +168,7 @@ vec4 getColorFromColorRamp() {
 }
 
 void main() {
-	gl_Position = gl_ModelViewProjectionMatrix * vec4(position.xy, 0.0, 1.0);
+	gl_Position = gl_ModelViewProjectionMatrix * vec4(pos.xy, 0.0, 1.0);
 	gl_PointSize = pointSize;
 	
 	vColor = getColorFromColorRamp();
