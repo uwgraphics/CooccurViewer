@@ -8,7 +8,6 @@ var isoluminantRdBuFixedWhite = ["#EC7B8B", "#FF696B", "#F07C68", "#D38D6D", "#B
 window.onload = main;
 
 var dataReady = false;
-var dataBreadthReady = true;
 var timer = null;
 
 var shaders = [];
@@ -25,120 +24,28 @@ var colormapTexture;
 var colormapWidth = 0;
 
 var ds = {
-  data: [],
-  depth: [],
-  definition: [],
   metrics: [],
   buffers: [],
-  bounds: {},
-  buf: 0,
+  bounds: [],
+  ready: [],
   numWindow: 0,
   numPos: 0,
-  minVal: 1000,
-  maxVal: -1000,
-  maxDepth: 0,
-  name: ""
+  curMetric: "",
+  curAttenuation: ""
 };
 
 var screenOffset = [0, 0];
 var scale = 1;
 var offset = [0, 0];
 
-var parseFile = function(text, binary) {
-  console.time("parsing file");
-  dataReady = false;
-  
-  if (binary) {
-    console.time("reading binary data");
-    
-    // assumes text is of type 'arraybuffer'
-    var dv = new DataView(text);
-    
-    // format of the file is windowSize (int), numPositions (int), then data
-    ds.numWindow = dv.getInt32(0);
-    ds.numPos = dv.getInt32(4);
-    
-    console.log("Found %d positions with %d window size", ds.numPos, ds.numWindow);
-    console.log("Number of elements found: %d, expected %d", (dv.byteLength - 8) / 4, ds.numPos * ds.numWindow);
-    
-    ds.data = new Float32Array(ds.numPos * ds.numWindow * 4);
-    var numFloats = ds.numPos * ds.numWindow;
-    for (var i = 0, offset = 8; i < ds.numPos; i++) {
-      for (var j = 0; j < ds.numWindow; j++, offset += 4) {
-        var curValue = dv.getFloat32(offset);
-        
-        var curIndex = (i * ds.numWindow + j) * 4
-        ds.data[curIndex] = i;
-        ds.data[curIndex + 1] = j;
-        ds.data[curIndex + 2] = curValue;
-        
-        ds.maxVal = Math.max(ds.maxVal, curValue);
-        ds.minVal = Math.min(ds.minVal, curValue);
-      }
-    }
-    
-    console.timeEnd("reading binary data");
-    
-  } else { // assume default is csv  
-    console.time("chunking data");
-    var delimiter = ",";
-    var lines = text.trim("\r").split("\n");
-    for (var i = 0; i < lines.length; i++) {
-      lines[i] = lines[i].split(delimiter);
-    }
-    
-    ds.numPos = lines.length;
-    ds.numWindow = lines[0].length;
-    ds.data = new Float32Array(ds.numPos * ds.numWindow * 4);
-    
-    for (var i = 0; i < ds.numPos; i++) {
-      for (var j = 0; j < ds.numWindow; j++) {
-        var curValue = +lines[i][j];
-        
-        // x,y position and z is the value
-        //var thisItem = [i, j, curValue];
-        var curIndex = (i * ds.numWindow + j) * 4
-        ds.data[curIndex] = i;
-        ds.data[curIndex + 1] = j;
-        ds.data[curIndex + 2] = curValue;
-        
-        // keep track of the largest/smallest value we've seen so far
-        ds.maxVal = Math.max(ds.maxVal, curValue);
-        ds.minVal = Math.min(ds.minVal, curValue);
-        
-        // push the point to the data stack
-        //ds.data.push(thisItem);
-      }
-    }
-    console.timeEnd("chunking data");
-  }
-  
-  // cheap flag to see whether we should load readBreadth data as well
-  if (useBivariate) {
-    $.get("readBreadthAll.csv", parseReadDepth);
-  } else {
-    console.time("sending data to GPU");
-    
-    // compile the GPU data buffer
-    ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
-    ds.buf.buffer = gl.createBuffer();
-    ds.buf.buffer.length = ds.numPos * ds.numWindow * 4;
-    ds.buf.buffer.spacing = 4;
-    
-    gl.bindBuffer(ds.buf.target, ds.buf.buffer);
-    gl.bufferData(ds.buf.target, ds.data, gl.STATIC_DRAW);
-    
-    console.timeEnd("sending data to GPU");
-    dataReady = true;
-  }
-  
-  console.timeEnd("parsing file");
-};
-
 // general function to read in binary data
 // assumes three header ints:
 // <window_size> <num_pos> <num-values-per-datapoint>
 var loadBinaryData = function(data, name, isDefinition) {
+  ds.ready[name] = false;
+  
+  console.time("parsing file " + name);
+
   var dv = new DataView(data);
   
   var thisNumWindow = dv.getInt32(0);
@@ -164,153 +71,77 @@ var loadBinaryData = function(data, name, isDefinition) {
     }
   }
   
-  var windowOffset = (ds.numWindow - thisNumWindow) / 2;
-  var numPositions = Math.min(ds.numPos, thisNumPos);
-  
-  if (isDefinition) {
-    // also include x and y coordinates of current point
-    if (thisSpacing > 2) {
-      console.error("cannot create a dataset definition from a file that contains >2 datum per element (gl.buffer can only support a vec4 at maximum)");
-      return false;
+  // if we don't have any population of numWindow and numPos, 
+  // populate it with this dataset.
+  var windowOffset = 0;
+  var numPositions = thisNumPos;
+  if (ds.numWindow == 0 || ds.numPos == 0) {
+    ds.numWindow = thisNumWindow;
+    ds.numPos = thisNumPos;
+    
+    // create a position buffer with all possible positions
+    var positions = new Float32Array(ds.numPos * ds.numWindow * 2);
+    for (var i = 0; i < ds.numPos; i++) {
+      for (var j = 0; j < ds.numWindow; j++) {
+        var curIndex = (i * ds.numWindow + j) * 2;
+        positions[curIndex] = i;
+        positions[curIndex + 1] = j;
+      }
     }
-    thisSpacing += 2;
     
-    ds.definition = new Float32Array(ds.numPos * ds.numWindow * thisSpacing);
+    // load the position buffer
+    ds.buffers['pos'] = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
+    ds.buffers['pos'].buffer = gl.createBuffer();
+    ds.buffers['pos'].buffer.length = ds.numPos * ds.numWindow * 2;
+    ds.buffers['pos'].buffer.spacing = 2;
     
-    for (var i = 0, offset = 12; i < numPositions; i++) {
-      for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
-        var curIndex = (i * ds.numWindow + j) * thisSpacing;
-        ds.definition[curIndex] = i;
-        ds.definition[curIndex + 1] = j;
+    gl.bindBuffer(ds.buffers['pos'].target, ds.buffers['pos'].buffer);
+    gl.bufferData(ds.buffers['pos'].target, positions, gl.STATIC_DRAW);
+  } else {
+    windowOffset = (ds.numWindow - thisNumWindow) / 2;
+    numPositions = Math.min(ds.numPos, thisNumPos);
+  }
+
+  ds.metrics[name] = new Float32Array(ds.numPos * ds.numWindow * thisSpacing);
+  ds.bounds[name] = [];
+  for (var n = 0; n < thisSpacing; n++) {
+    ds.bounds[name][n] = [];
+    ds.bounds[name][n][0] = 10000;
+    ds.bounds[name][n][1] = -10000;
+  }
+
+  for (var i = 0, offset = 12; i < numPositions; i++) {
+    for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
+      var curIndex = (i * ds.numWindow + j) * thisSpacing;
+      for(var n = 0; n < thisSpacing; n++) {
+        var curVal = dv.getFloat32(offset);
+        ds.metrics[name][curIndex + n] = curVal;
         
-        for (var n = 0; n < (thisSpacing - 2); n++) {
-          ds.definition[curIndex + 2 + n] = dv.getFloat32(offset);
-          offset += 4;
-        }
-      }
-    }
-  } else {
-    ds.metrics[name] = new Float32Array(ds.numPos * ds.numWindow * thisSpacing);
-  
-    for (var i = 0, offset = 12; i < numPositions; i++) {
-      for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
-        var curIndex = (i * ds.numWindow + j) * thisSpacing;
-        for(var n = 0; n < thisSpacing; n++) {
-          ds.metrics[name][curIndex + n] = dv.getFloat32(offset);
-          offset += 4;
-        }
+        ds.bounds[name][n][0] = Math.min(ds.bounds[name][n][0], curVal);
+        ds.bounds[name][n][1] = Math.max(ds.bounds[name][n][1], curVal); 
+        
+        offset += 4;
       }
     }
   }
   
-  var bufLoc = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
-  bufLoc.buffer = gl.createBuffer();
-  bufLoc.buffer.length = ds.numPos * ds.numWindow * thisSpacing;
-  bufLoc.buffer.spacing = thisSpacing;
+  ds.buffers[name] = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
+  ds.buffers[name].buffer = gl.createBuffer();
+  ds.buffers[name].buffer.length = ds.numPos * ds.numWindow * thisSpacing;
+  ds.buffers[name].buffer.spacing = thisSpacing;
   
-  gl.bindBuffer(bufLoc.target, bufLoc.buffer);
+  gl.bindBuffer(ds.buffers[name].target, ds.buffers[name].buffer);
+  gl.bufferData(ds.buffers[name].target, ds.metrics[name], gl.STATIC_DRAW);
   
-  if (isDefinition) {
-    gl.bufferData(bufLoc.target, ds.definition, gl.STATIC_DRAW);
-    ds.buf = bufLoc;
-  } else {
-    gl.bufferData(bufLoc.target, ds.metrics[name], gl.STATIC_DRAW);
-    ds.buffers[name] = bufLoc;
-  }
+  gl.bindBuffer(ds.buffers[name].target, null);
   
+  console.timeEnd("parsing file " + name);
+  
+  ds.ready[name] = true;
   return true;
 };
 
-// assumes we're loading in a binary read depth file
-// header is three int32: <window_size> <num_pos> <num-values-per-datapoint>
-var loadDatasetDefinition = function(depth, name) {
-  var dv = new DataView(depth);
-  
-  ds.numWindow = dv.getInt32(0);
-  ds.numPos = dv.getInt32(4);
-  var spacing = dv.getInt32(8);
-  
-  // do some really simple error checking.  if there's anything wrong with this file,
-  // other files will probably have similar issues
-  var expectedBytes = (ds.numWindow * ds.numPos * spacing) * 4 + 12;
-  if (dv.byteLength !== expectedBytes) {
-    console.error("Size mismatch... expected %d window x %d positions x %d elements + 12 header bytes = %d bytes, found %d instead", ds.numWindow, ds.numPos, spacing, expectedBytes, dv.byteLength);
-    return;
-  }
-  
-  if (!loadBinaryData(depth, "main", true)) {
-    console.error("Error loading data definition from file %s", name);
-  }
-};
-
-// adds read depth information to the data parsed
-var parseReadDepth = function(text) {
-  if (!text) {
-    console.warn("no text found for parseReadDepth().");
-    return;
-  }
-  
-  console.time("parsing read depth file");
-  
-  console.time("chunking data");
-  var delimiter = ",";
-  var lines = text.trim("\r").split("\n");
-  for (var i = 0; i < lines.length; i++) {
-    lines[i] = lines[i].split(delimiter);
-  }
-  
-  // do some range checks to make sure we're looking at the same original data (same window size, numPositions)
-  if (ds.numPos != lines.length) {
-    console.warn("number of lines in depth does not match data: expected %d, depth had %d lines", ds.numPos, lines.length);
-  } 
-  
-  if (ds.numWindow != lines[0].length) {
-    console.warn("number of items in a window does not match data: expected %d, depth had a window size of %d", ds.numWindow, lines[0].length);
-  }
-  
-  // if the window and positions don't line up, align the positions to the start
-  // and center align the window.
-  var windowOffset = (ds.numWindow - lines[0].length) / 2;
-  var numPositions = Math.min(lines.length, ds.numPos);
-  for (var i = 0; i < numPositions; i++) {
-    for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
-      var curValue = +lines[i][j - windowOffset];
-      var curIndex = (i * ds.numWindow + j) * 4 + 3;
-      
-      ds.data[curIndex] = curValue;
-      ds.maxDepth = Math.max(ds.maxDepth, curValue);      
-    }
-  }  
-  
-  console.timeEnd("parsing read depth file");
-  
-  console.time("sending data to GPU");
-  
-  // compile the GPU data buffer
-  ds.buf = new GL.Buffer(gl.ARRAY_BUFFER, Float32Array);
-  ds.buf.buffer = gl.createBuffer();
-  ds.buf.buffer.length = ds.numPos * ds.numWindow * 4;
-  ds.buf.buffer.spacing = 4;
-  
-  gl.bindBuffer(ds.buf.target, ds.buf.buffer);
-  gl.bufferData(ds.buf.target, ds.data, gl.STATIC_DRAW);
-  
-  console.timeEnd("sending data to GPU");
-  
-  dataReady = true;
-};
-
-// construct a bitmap image using `bitmap.js`.
-// used as a debugging tool, but also creates the bitmap to load into the texture
-var debugImg = function() {
-  var img = new Image();
-  
-  img.src = generateBitmapDataURL(ds.bmpData);
-  img.width = 800;
-  img.id = "bmpimg";
-  document.getElementById("img-container").appendChild(img);
-};
-
+// get the current metric's values for the given coordinate
 var debugPoint = function(x, y) {
   var wIndex = x - y + Math.floor(ds.numWindow / 2);
   
@@ -322,9 +153,15 @@ var debugPoint = function(x, y) {
   
   console.log("got wIndex: %d", wIndex);
   
-  var curIndex = (y * ds.numWindow + wIndex) * 4;
+  var curSpacing = ds.buffer[ds.curMetric].buffer.spacing;
+  var curIndex = (y * ds.numWindow + wIndex) * curSpacing;
   
-  return [ds.data[curIndex], ds.data[curIndex + 1], ds.data[curIndex + 2], ds.data[curIndex + 3]];
+  var ret = [];
+  for (var i = 0; i < curSpacing; i++) {
+    ret[i] = ds.metric[ds.curMetric][curIndex + i];
+  }
+  
+  return ret;
 };
 
 /*
@@ -379,8 +216,11 @@ var colorbrewerRampToTexture = function(colors, doReverse) {
 };
 
 // given an absolute position x, y (e.g. the actual positions of x and y; y is NOT
-// an index into the window), return the value from the data
-var getDataValueFromAbsolutePosition = function(x, y) {
+// an index into the window), return the n-th value from the current metric
+var getDataValueFromAbsolutePosition = function(x, y, n) {
+  // default to the first value (if 1-D metric)
+  n = n || 0;
+  
   // have to convert from absolute y to a window index;
   // y = x corresponds to Math.floor(ds.numWindow / 2)
   var wIndex = x - y + Math.floor(ds.numWindow / 2);
@@ -391,15 +231,20 @@ var getDataValueFromAbsolutePosition = function(x, y) {
     return false;
   }
   
-  return ds.data[(y * ds.numWindow + wIndex) * 4 + 2];
+  var curData = ds.metric[ds.curMetric];
+  var curSpacing = ds.buffer[ds.curMetric].buffer.spacing;
+  
+  return curData[(y * ds.numWindow + wIndex) * curSpacing + n];
 };
 
-// given a x position (position number) and a y value (window value),
-// get the color that represents this value
-var getColorForPosition = function(x, y) {
-  var curIndex = (x * ds.numWindow + y) * 4 + 2;
+// given a x position (position number) and a y value (window value) and optionally
+// the n-th value (defaults to 0), get the color that represents the n-th value
+var getColorForPosition = function(x, y, n) {
+  n = n || 0;
+  var curSpacing = ds.buffer[ds.curMetric].buffer.spacing;
+  var curIndex = (x * ds.numWindow + y) * curSpacing + n;
   
-  var data = ds.data[curIndex];
+  var data = ds.metric[ds.curMetric][curIndex];
   
   return getColorFromDataValue(data);  
 }
@@ -434,78 +279,15 @@ var getColorFromDataValue = function(value) {
   return arr;
 };
 
-// take ds.data and turn it into a texture
-var overviewToTexture = function() {
-  console.time("constructing overview texture using CPU");
+// gets the currently selected buffers and creates a lightgl-compatible array
+// for passing to `GL.Shader.drawBuffers();`.
+var getCurrentBuffers = function() {
+  var curBufs = [];
+  curBufs['pos'] = ds.buffers['pos'];
+  curBufs['metric'] = ds.buffers[ds.curMetric];
+  curBufs['atten'] = ds.buffers[ds.curAttenuation];
   
-  // if the texture already exists, use it
-  var curTexture = $("#usecolorbrewer").prop('checked') ? "lightOver" : "colorOver";
-  if (textures[curTexture]) {
-    return;
-  }
- 
-  var texWidth = ds.numPos;
-  var arr;
-  var maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-
-  // arrange the data as appropriate
-  if (ds.numPos < maxTexSize) {
-    arr = new Uint8Array(ds.numPos * ds.numWindow * 4)
-    
-    for (var x = 0; x < ds.numPos; x++) {
-      for (var y = 0; y < ds.numWindow; y++) {
-        var curVal = getColorForPosition(x, y);
-        var curIndex = (y * ds.numPos + x) * 4;
-        
-        for (var n = 0; n < 4; n++) {
-          arr[curIndex + n] = curVal[n];
-        }
-      }
-    }
-  } else {
-    var numPixelsToCollapse = Math.ceil(ds.numPos / maxTexSize);
-    texWidth = Math.ceil(ds.numPos / numPixelsToCollapse);
-    
-    arr = new Uint8Array(texWidth * ds.numWindow * 4);
-    
-    for (var y = 0; y < ds.numWindow; y++) {
-      for (var x = 0; x < texWidth; x++) {
-        var numPixels = numPixelsToCollapse;
-        var sumPixels = 0;
-        
-        for (var n = 0; n < numPixelsToCollapse; n++) {
-          var curIndex = ((x * numPixelsToCollapse) + n) * ds.numWindow + y;
-          
-          if (curIndex < ds.numPos * ds.numWindow) {
-            sumPixels += ds.data[curIndex * 4 + 2];
-          } else {
-            numPixels--;
-          }
-        }
-        
-        var destIndex = (y * texWidth + x) * 4;
-        if (numPixels <= 0) {
-          arr[destIndex + 3] = 255;
-          continue;
-        } 
-        
-        var curVal = getColorFromDataValue(sumPixels / numPixels);
-        for (var n = 0; n < 4; n++) {
-          arr[destIndex + n] = curVal[n];
-        }
-      }
-    }
-  }
-
-  // create the texture, if it doesn't exist
-  textures[curTexture] = new GL.Texture(texWidth, ds.numWindow);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
-  
-  textures[curTexture].bind(0);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, texWidth, ds.numWindow, 0, gl.RGBA, gl.UNSIGNED_BYTE, arr);
-  textures[curTexture].unbind(0);
-  
-  console.timeEnd("constructing overview texture using CPU");
+  return curBufs;
 };
 
 // TODO: shader doesn't support non-colorbrewer coloring mode
@@ -526,6 +308,7 @@ var constructOverviewTexture = function() {
     textures[curTexture] = new GL.Texture(gl.canvas.width, texHeight);
   }
   
+  var curBufs = getCurrentBuffers();
   textures[curTexture].drawTo(function() {
     var bivar = useBivariate ? 1 : 0;
     var darken = $("#dodarkening").prop('checked') ? 1 : 0;
@@ -536,21 +319,19 @@ var constructOverviewTexture = function() {
       gl.clearColor(1.0, 1.0, 1.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
-    var vertBuffer = [];
-    vertBuffer['position'] = ds.buf; 
     colormapTexture.bind(0);
     
     shaders['fillOverview'].uniforms({
       dataSize: [ds.numPos, ds.numWindow],
-      minVal: ds.minVal,
-      maxVal: ds.maxVal,
-      maxDepth: ds.maxDepth,
+      minVal: ds.bounds[ds.curMetric][0][0],
+      maxVal: ds.bounds[ds.curMetric][0][1],
+      maxAtten: ds.bounds[ds.curAttenuation][0][1],
       bivariate: bivar,
       darkening: darken,
       rampTexWidth: colormapWidth,
       numSteps: chosenColormap.length,
       colorRamp: 0
-    }).drawBuffers(vertBuffer, null, gl.POINTS);
+    }).drawBuffers(curBufs, null, gl.POINTS);
     
     colormapTexture.unbind(0);
   });
@@ -704,7 +485,8 @@ gl.ondraw = function() {
   var ptShader = $("#dodiagonal").prop('checked') ? shaders['pointsDiag'] : shaders['points'];
   var cbPtShader = $("#dodiagonal").prop('checked') ? shaders['cb_pointsDiag'] : shaders['cb_points'];
 
-  if (!dataReady || !dataBreadthReady || !ptShader || !cbPtShader || 
+  if (!ds.buffers['pos'] || !ds.ready[ds.curMetric] || !ds.ready[ds.curAttenuation] ||
+      !ptShader || !cbPtShader || 
       !shaders['overview'] || !shaders['solid'] || !shaders['fillOverview']) 
   {
     timer = setTimeout("gl.ondraw()", 300);
@@ -733,8 +515,7 @@ gl.ondraw = function() {
   gl.matrixMode(gl.MODELVIEW);
   setZoomPan(); // unused right now...
   
-  var vertBuffer = [];
-  vertBuffer['position'] = ds.buf; 
+  var curBufs = getCurrentBuffers();
   if ($("#usecolorbrewer").prop('checked')) {
     colormapTexture.bind(0);
     var bivar = useBivariate ? 1 : 0;
@@ -744,9 +525,9 @@ gl.ondraw = function() {
     cbPtShader.uniforms({
       pointSize: 1,
       windowSize: ds.numWindow,
-      maxVal: ds.maxVal,
-      minVal: ds.minVal,
-      maxDepth: ds.maxDepth,
+      minVal: ds.bounds[ds.curMetric][0][0], 
+      maxVal: ds.bounds[ds.curMetric][0][1],
+      maxAtten: ds.bounds[ds.curAttenuation][0][1],
       bivariate: bivar,
       darkening: darken,
       confidence: confid,
@@ -754,9 +535,10 @@ gl.ondraw = function() {
       rampTexWidth: colormapWidth,
       numSteps: chosenColormap.length,
       colorRamp: 0
-    }).drawBuffers(vertBuffer, null, gl.POINTS);
+    }).drawBuffers(curBufs, null, gl.POINTS);
     colormapTexture.unbind(0);
   } else {
+    console.error("unimplemented; needs a shader update");
     ptShader.uniforms({
       pointSize: 1,
       windowSize: ds.numWindow,
@@ -765,7 +547,6 @@ gl.ondraw = function() {
   }
   
   gl.popMatrix();
-  
   
   // draw the overview
   var curTexture = $("#usecolorbrewer").prop('checked') ? "lightOver" : "colorOver";
@@ -1109,6 +890,7 @@ function main() {
     gl.ondraw();
   });
 
+  /*
   if (location.search == "?reads") {
     useBivariate = false;
     $.get("readBreadthAll.csv", function(data) { parseFile(data); });
@@ -1152,9 +934,40 @@ function main() {
       }
     });
     
-    useBivariate = true;
+    useBivariate = false;
     xhr.send(null);
-  }
+  }*/
+  
+  var makeBinaryFileRequest = function(filename, name) {
+    // if a specific name is given, use it; otherwise just use the filename 
+    // as the identifier
+    name = name || filename;
+    
+    // jQuery looks too hard here; it's not implemented yet for ArrayBuffer 
+    // xhr requests, which is an HTML5 phenomenon:
+    // http://www.artandlogic.com/blog/2013/11/jquery-ajax-blobs-and-array-buffers/
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', filename, true);
+    xhr.responseType = 'arraybuffer';
+    
+    xhr.addEventListener('load', function() {
+      if (xhr.status == 200) {
+        loadBinaryData(xhr.response, name);
+      } else {
+        console.warning("failed to load requested file (status: %d)", xhr.status);
+        console.trace();
+      }
+    });
+    
+    xhr.send(null);
+  };
+  
+  makeBinaryFileRequest('readBreadth.dat', 'depth');
+  makeBinaryFileRequest('conjProbDiff.dat');
+  
+  ds.curAttenuation = 'depth';
+  ds.curMetric = 'conjProbDiff.dat';
+  useBivariate = true;
   
   populateSuperZoom();
   
