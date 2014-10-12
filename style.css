@@ -90,6 +90,11 @@ svg#legend {
 	padding: 15px;
 }
 
+#metriceq {
+	display: block;
+	margin: 10px auto;
+}
+
 #canvas-labels {
 	position: absolute;
 	z-index: -10;

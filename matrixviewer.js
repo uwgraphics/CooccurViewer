@@ -41,7 +41,7 @@ var offset = [0, 0];
 // general function to read in binary data
 // assumes three header ints:
 // <window_size> <num_pos> <num-values-per-datapoint>
-var loadBinaryData = function(data, name, isDefinition) {
+var loadBinaryData = function(data, name) {
   ds.ready[name] = false;
   
   console.time("parsing file " + name);
@@ -138,6 +138,8 @@ var loadBinaryData = function(data, name, isDefinition) {
   console.timeEnd("parsing file " + name);
   
   ds.ready[name] = true;
+  
+  gl.ondraw();
   return true;
 };
 
@@ -765,10 +767,12 @@ gl.onmousemove = function(e) {
   panX = e.x;
   panY = gl.canvas.height - e.y;
   
-  console.log("mouse at %d, %d", panX, panY);
-  
   if (drags(e)) {    
-    console.log("dragging at %d, %d", panX, panY);
+    if (e.y <= topMargin) {
+      setCleanXInput(panX);
+      updateAxisLabels();
+      gl.ondraw();
+    }
   } else if (ds.ready[ds.curMetric] && $("#dodiagonal").prop('checked')) {
     if (e.y <= topMargin) {
       // blank out super-zoom
@@ -902,6 +906,21 @@ function main() {
     
     xhr.send(null);
   };
+  
+  $("#metrics").change(function() {
+    var filename = $(this).val();
+    
+    // set the new equation image
+    document.getElementById("metriceq").src = "img/" + filename + ".png";
+    
+    // check if this data has been loaded already
+    if (!ds.ready[filename]) {
+      makeBinaryFileRequest(filename);
+    }
+    
+    ds.curMetric = filename;
+    gl.ondraw();
+  });
   
   makeBinaryFileRequest('readBreadth.dat', 'depth');
   makeBinaryFileRequest('conjProbDiff.dat');
