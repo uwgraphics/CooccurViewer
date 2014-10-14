@@ -360,12 +360,12 @@ var setZoomPan = function() {
   // gl.rotate(-45, 0, 0, 1);
   if ($("#dodiagonal").prop('checked')) {
     // give an upper margin of 100 pixels
-    gl.scale(1, -1, 1);    
+    gl.translate(0, (topMargin - gl.canvas.height) * (scale - 1), 0);
+    gl.scale(scale, -scale, 1);
     gl.translate(screenOffset[0], screenOffset[0] - gl.canvas.height + topMargin, 0);
-    // gl.translate(-55, -55, 0);
   } else {
     gl.translate(screenOffset[0], screenOffset[1], 0);
-    gl.scale(1, 1, 1);
+    gl.scale(scale, scale, 1);
   }
 };
 
@@ -457,7 +457,7 @@ var createTextures = function() {
 };
 
 var updateIndicator = function(setupOnly) {
-  indicatorWidth = $("#dodiagonal").prop('checked') ? 2 * (gl.canvas.height - indicatorHeight) / ds.numPos : 2 * (gl.canvas.width / ds.numPos);
+  indicatorWidth = $("#dodiagonal").prop('checked') ? 2 * (gl.canvas.height - indicatorHeight - topMargin) / ds.numPos / scale : 2 * (gl.canvas.width / ds.numPos) / scale;
   
   // get the current 'x pos'
   var xpos = -screenOffset[0];
@@ -517,7 +517,7 @@ gl.ondraw = function() {
     var confid = $("#doconfidence").prop('checked') ? 1 : 0;
     var binL = $("#dolightbinning").prop('checked') ? 1 : 0;
     cbPtShader.uniforms({
-      pointSize: 1,
+      pointSize: scale,
       windowSize: ds.numWindow,
       minVal: ds.bounds[ds.curMetric][0][0], 
       maxVal: ds.bounds[ds.curMetric][0][1],
@@ -613,13 +613,13 @@ var spacify = function(number) {
 
 var updateAxisLabels = function() {
   var xmin = Math.floor(-screenOffset[0]);
-  var xmax = Math.floor(-screenOffset[0] + gl.canvas.width);
+  var xmax = Math.floor(-screenOffset[0] + gl.canvas.width / scale);
   
   $("#label-xmin").html(spacify(xmin));
   $("#label-xmax").html(spacify(xmax));
   if ($("#dodiagonal").prop('checked')) {
     var ymin = xmin;
-    var ymax = ymin + gl.canvas.height - topMargin;
+    var ymax = Math.floor(ymin + (gl.canvas.height - topMargin) / scale);
     
     $("#label-ymin").html(spacify(ymin));
     $("#label-ymax").html(spacify(ymax));
@@ -685,14 +685,14 @@ var convertScreenToDataCoords = function() {
     var xmin = Math.floor(-screenOffset[0]);
     var ymin = xmin;
     
-    xval = panX + xmin;
-    yval = (gl.canvas.height - panY) - topMargin + ymin;
+    xval = (panX / scale) + xmin;
+    yval = ((gl.canvas.height - panY) - topMargin) / scale + ymin;
   } else { // TODO: implement
     xval = -1;
     yval = -1;
   }
   
-  return [xval, yval];
+  return [Math.floor(xval), Math.floor(yval)];
 };
 
 // update legend with the current colorramp (uses D3.js)
@@ -798,6 +798,17 @@ var drags = function(e) {
   }  
 };
 
+var mwheel = function(e, delta, deltaX, deltaY) {
+  e.preventDefault();
+  
+  var x = e.offsetX;
+  var y = gl.canvas.height - e.offsetY;
+  
+  scale = deltaY > 0 ? scale * 2 : scale / 2;
+  
+  gl.ondraw();
+};
+
 // Function to handle asynchronous loading and compilation of shaders.
 var loadShaderFromFiles = function(name, opt_vn, opt_fn, callback) {
   var vn = opt_vn || name + '.vs';
@@ -866,13 +877,15 @@ function main() {
     gl.ondraw();
   };
   
-  $("#dodiagonal").change(gl.ondraw);
+  // Add mousewheel listener to the canvas
+  $("#webglcanvas").mousewheel(mwheel);
   
   $("#dodarkening").change(function() {
     updateLegend();
     gl.ondraw();
   });
   
+  $("#dodiagonal").change(gl.ondraw);
   $("#doconfidence").change(gl.ondraw);
   $("#dolightbinning").change(gl.ondraw);
   $("#useisoluminant").change(changeColormap);
