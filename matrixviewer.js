@@ -695,12 +695,26 @@ var convertScreenToDataCoords = function() {
   return [Math.floor(xval), Math.floor(yval)];
 };
 
+// do this outside (this is the D3 thing to do?!)
+var svg = d3.select("#legend")
+  .append('g')
+    .attr('id', 'swatchgrp')
+    .attr('transform', 'translate(45, 25)');
+    
+// also make an x-axis group    
+svg.append('g')
+  .attr('class', 'axis metric-axis')
+  .attr('transform', 'translate(0, -2)');
+  
+svg.append('g')
+  .attr('class', 'axis attenuation-axis')
+  .attr('transform', 'translate(-2, 0)');
+
 // update legend with the current colorramp (uses D3.js)
 var updateLegend = function() {
   // the data we're using is the 'chosenColormap'; assume it's been populated by this point
   
   var svgWidth = 200, svgHeight = 200;
-  var svg = d3.select("#legend").attr('width', svgWidth).attr('height', svgHeight);
   
   var margin = 2;
   var effWidth = svgWidth - margin;
@@ -708,6 +722,37 @@ var updateLegend = function() {
   
   var numLightBins = 11;  
   var scales = [];
+  
+  if (ds.ready[ds.curMetric]) {
+    var metricScale = d3.scale.linear()
+      .domain(ds.bounds[ds.curMetric][0])
+      .range([19, 181]);
+      
+    var metricAxis = d3.svg.axis()
+      .scale(metricScale)
+      .orient('top')
+      .tickFormat(d3.format(".1f"))
+      .ticks(6);
+      
+    svg.select("g.metric-axis")
+      .call(metricAxis);
+  }
+  
+  if (ds.ready[ds.curAttenuation]) {
+    var bounds = ds.bounds[ds.curAttenuation][0];
+  
+    var attenScale = d3.scale.linear()
+      .domain([bounds[1], bounds[0]])
+      .range([19, 181]);
+      
+    var attenAxis = d3.svg.axis()
+      .scale(attenScale)
+      .orient('left')
+      .ticks(6);
+      
+    svg.select("g.attenuation-axis")
+      .call(attenAxis);
+  }
       
   // remove any existing color key from the svg
   svg.selectAll('.swatch').remove();

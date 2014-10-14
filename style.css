@@ -72,12 +72,24 @@ canvas {
 svg#legend {
 	box-sizing: content-box;
 	border: 1px solid #000;
-	height: 200px;
-	width: 200px;
+	height: 250px;
+	width: 250px;
 	z-index: -20;
 	position: absolute;
-	top: 350px;
-	left: 900px;
+	top: 325px;
+	left: 875px;
+}
+
+svg#legend .axis path,
+svg#legend .axis line {
+	fill: none;
+	stroke: #000;
+	shape-rendering: crispEdges;
+}
+
+svg#legend .axis text {
+	font-family: sans-serif;
+	font-size: 11px;
 }
 
 #chooser {
@@ -86,7 +98,7 @@ svg#legend {
 	width: 300px;
 	position: absolute;
 	left: 850px;
-	top: 575px;
+	top: 600px;
 	padding: 15px;
 }
 
