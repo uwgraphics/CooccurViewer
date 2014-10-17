@@ -143,6 +143,78 @@ var loadBinaryData = function(data, name) {
   return true;
 };
 
+var loadBinaryShortSparseData = function(data, name) {
+  ds.ready[name] = false;
+  
+  console.time("parsing file (as shorts) " + name);
+  
+  var dv = new DataView(data);
+  
+  var thisNumWindow = dv.getInt32(0);
+  var thisNumPos = dv.getInt32(4);
+  var thisSpacing = dv.getInt32(8);
+  
+  // do a bunch of error checking (also serves as documentation)
+  if (ds.numPos && ds.numPos != thisNumPos) {
+    console.warn("number of lines in file %s does not match data: expected %d, depth had %d lines", name, ds.numWindow, thisNumWindow);
+  }
+  
+  if (ds.numWindow && ds.numWindow != thisNumWindow) {
+    console.warn("number of items in a window does not match data in %s: expected %d, depth had a window size of %d", name, ds.numWindow, thisNumWindow);
+  }
+  
+  var expectedBytes = (thisNumWindow * thisNumPos * thisSpacing) * 4 + 12;
+  if (dv.byteLength !== expectedBytes) {
+    console.warn("expected to find %d bytes of data from header, found %d instead. unusual truncation may occur", dv.byteLength, expectedBytes);
+    
+    if (dv.byteLength < expectedBytes) {
+      console.error("missing data designated by header, please check the file. aborting.");
+      return false;
+    }
+  }
+  
+  if (ds.numWindow == 0 || ds.numPos == 0) {
+    console.error("not expecting to call this method before other data is loaded (loadBinaryData)");
+    return;
+  }
+  
+  var windowOffset = (ds.numWindow - thisNumWindow) / 2;
+  ds.bounds[name] = [];
+  for (var n = 0; n < thisSpacing; n++) {
+    ds.bounds[name][n] = [];
+    ds.bounds[name][n][0] = 10000;
+    ds.bounds[name][n][1] = -10000;
+  }
+  
+  ds.metrics[name] = new Int16Array(ds.numPos * ds.numWindow * thisSpacing);
+  for (var i = 0, offset = 12; i < numPositions; i++) {
+    for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
+      var curIndex = dv.getInt32(offset);
+      offset += 4;
+      
+      // offset the index by # values per element
+      curIndex *= thisSpacing;
+      
+      for (var n = 0; n < thisSpacing; n++) {
+        var curVal = dv.getInt16(offset);
+        ds.metrics[name][curIndex + n] = curVal;
+        
+        ds.bounds[name][n][0] = Math.min(ds.bounds[name][n][0], curVal);
+        ds.bounds[name][n][1] = Math.max(ds.bounds[name][n][1], curVal);
+        
+        offset += 2;
+      }
+    }
+  }
+  
+  // bind a buffer? probably not yet
+  
+  console.timeEnd("parsing file (as shorts) " + name);
+  
+  ds.ready[name] = true;
+  return true;
+};
+
 // get the current metric's values for the given coordinate
 var debugPoint = function(x, y) {
   var wIndex = x - y + Math.floor(ds.numWindow / 2);
@@ -885,6 +957,30 @@ var reloadShader = function(name, vs, fs) {
   loadShaderFromFiles(name, vs, fs, gl.ondraw);
 };
 
+var makeBinaryFileRequest = function(filename, name) {
+  // if a specific name is given, use it; otherwise just use the filename 
+  // as the identifier
+  name = name || filename;
+  
+  // jQuery looks too hard here; it's not implemented yet for ArrayBuffer 
+  // xhr requests, which is an HTML5 phenomenon:
+  // http://www.artandlogic.com/blog/2013/11/jquery-ajax-blobs-and-array-buffers/
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', filename, true);
+  xhr.responseType = 'arraybuffer';
+  
+  xhr.addEventListener('load', function() {
+    if (xhr.status == 200) {
+      loadBinaryData(xhr.response, name);
+    } else {
+      console.warning("failed to load requested file (status: %d)", xhr.status);
+      console.trace();
+    }
+  });
+  
+  xhr.send(null);
+};
+
 function main() {
   gl.canvas.id = "webglcanvas";
   var canvasContainer = document.getElementById("canvas-container");
@@ -940,30 +1036,6 @@ function main() {
     overviewToTexture();
     gl.ondraw();
   });
-  
-  var makeBinaryFileRequest = function(filename, name) {
-    // if a specific name is given, use it; otherwise just use the filename 
-    // as the identifier
-    name = name || filename;
-    
-    // jQuery looks too hard here; it's not implemented yet for ArrayBuffer 
-    // xhr requests, which is an HTML5 phenomenon:
-    // http://www.artandlogic.com/blog/2013/11/jquery-ajax-blobs-and-array-buffers/
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', filename, true);
-    xhr.responseType = 'arraybuffer';
-    
-    xhr.addEventListener('load', function() {
-      if (xhr.status == 200) {
-        loadBinaryData(xhr.response, name);
-      } else {
-        console.warning("failed to load requested file (status: %d)", xhr.status);
-        console.trace();
-      }
-    });
-    
-    xhr.send(null);
-  };
   
   $("#metrics").change(function() {
     var filename = $(this).val();
