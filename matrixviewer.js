@@ -9,6 +9,9 @@ window.onload = main;
 
 var timer = null;
 
+var extraTimer = "hello!";  // timer for extra data
+var extraRequested = false; // have we requested the extra files?
+
 var shaders = [];
 var textures = [];
 var overview, indicator, indicatorBackground;
@@ -31,7 +34,8 @@ var ds = {
   numWindow: 0,      // the number of window positions in this dataset
   numPos: 0,         // the number of base positions in this dataset
   curMetric: "",     // the current metric drawn
-  curAttenuation: "" // the current attentuation metric
+  curAttenuation: "",// the current attentuation metric
+  curCounts: []      // keeps track of all the count metrics (ints) loaded in
 };
 
 var screenOffset = [0, 0];
@@ -150,27 +154,17 @@ var loadBinaryShortSparseData = function(data, name) {
   
   var dv = new DataView(data);
   
+  var headerSize = 12;
   var thisNumWindow = dv.getInt32(0);
   var thisNumPos = dv.getInt32(4);
   var thisSpacing = dv.getInt32(8);
   
-  // do a bunch of error checking (also serves as documentation)
-  if (ds.numPos && ds.numPos != thisNumPos) {
-    console.warn("number of lines in file %s does not match data: expected %d, depth had %d lines", name, ds.numWindow, thisNumWindow);
-  }
-  
-  if (ds.numWindow && ds.numWindow != thisNumWindow) {
-    console.warn("number of items in a window does not match data in %s: expected %d, depth had a window size of %d", name, ds.numWindow, thisNumWindow);
-  }
-  
-  var expectedBytes = (thisNumWindow * thisNumPos * thisSpacing) * 4 + 12;
-  if (dv.byteLength !== expectedBytes) {
-    console.warn("expected to find %d bytes of data from header, found %d instead. unusual truncation may occur", dv.byteLength, expectedBytes);
+  // total size - header / (associatedIndex (int32, 4b) + data_vals_per_element (int16, 2b))
+  var expectedPositions = (dv.byteLength - headerSize) / (thisSpacing * 2 + 4);
+  if (expectedPositions % 1 != 0) {
+    console.warn("expected to find %d positions of data, found a fraction of %f extra data (each element has %d data values associated", expectedPositions, expectedPositions % 1, thisSpacing);
     
-    if (dv.byteLength < expectedBytes) {
-      console.error("missing data designated by header, please check the file. aborting.");
-      return false;
-    }
+    expectedPositions = Math.floor(expectedPositions);
   }
   
   if (ds.numWindow == 0 || ds.numPos == 0) {
@@ -178,7 +172,8 @@ var loadBinaryShortSparseData = function(data, name) {
     return;
   }
   
-  var windowOffset = (ds.numWindow - thisNumWindow) / 2;
+  console.log("loading %s into an flattened array of size [%d][%d][%d] (pos, window, spacing)", name, thisNumPos, thisNumWindow, thisSpacing);
+  
   ds.bounds[name] = [];
   for (var n = 0; n < thisSpacing; n++) {
     ds.bounds[name][n] = [];
@@ -186,7 +181,27 @@ var loadBinaryShortSparseData = function(data, name) {
     ds.bounds[name][n][1] = -10000;
   }
   
-  ds.metrics[name] = new Int16Array(ds.numPos * ds.numWindow * thisSpacing);
+  var offset = headerSize;
+  ds.metrics[name] = new Int16Array(thisNumWindow * thisNumPos * thisSpacing);
+  
+  for (var i = 0; i < expectedPositions; i++) {
+    var curIndex = dv.getInt32(offset);
+    offset += 4;
+    
+    curIndex *= thisSpacing;
+    
+    for (var n = 0; n < thisSpacing; n++) {
+      var curVal = dv.getInt16(offset);
+      ds.metrics[name][curIndex + n] = curVal;
+      
+      ds.bounds[name][n][0] = Math.min(ds.bounds[name][n][0], curVal);
+      ds.bounds[name][n][1] = Math.max(ds.bounds[name][n][1], curVal);
+      
+      offset += 2;
+    }
+  }
+  
+  /*
   for (var i = 0, offset = 12; i < numPositions; i++) {
     for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
       var curIndex = dv.getInt32(offset);
@@ -206,6 +221,7 @@ var loadBinaryShortSparseData = function(data, name) {
       }
     }
   }
+  */
   
   // bind a buffer? probably not yet
   
@@ -213,6 +229,25 @@ var loadBinaryShortSparseData = function(data, name) {
   
   ds.ready[name] = true;
   return true;
+};
+
+// function to load data that isn't critical for the operation of the visualization
+var loadExtraData = function() {
+  // short-circuit if we've already requested the file
+  if (extraRequested) return;
+
+  if (extraTimer && (!ds.ready[ds.curMetric] || !ds.ready[ds.curAttenuation])) {
+    extraTimer = setTimeout(loadExtraData, 500);
+  }
+  
+  extraRequested = true;
+  extraTimer = null;
+  
+  ds.curCounts = ["varCounts", "baseCounts"];
+  
+  // request the count files
+  makeBinaryFileRequest("variantCounts.dat", "varCounts", true);
+  makeBinaryFileRequest("baseCounts.dat", "baseCounts", true);
 };
 
 // get the current metric's values for the given coordinate
@@ -562,6 +597,9 @@ gl.ondraw = function() {
   if (!texturesCreated) {
     createTextures();
   }
+  
+  
+  loadExtraData();
   
   constructOverviewTexture();
   
@@ -957,7 +995,7 @@ var reloadShader = function(name, vs, fs) {
   loadShaderFromFiles(name, vs, fs, gl.ondraw);
 };
 
-var makeBinaryFileRequest = function(filename, name) {
+var makeBinaryFileRequest = function(filename, name, doShort) {
   // if a specific name is given, use it; otherwise just use the filename 
   // as the identifier
   name = name || filename;
@@ -971,7 +1009,11 @@ var makeBinaryFileRequest = function(filename, name) {
   
   xhr.addEventListener('load', function() {
     if (xhr.status == 200) {
-      loadBinaryData(xhr.response, name);
+      if (doShort === true) {
+        loadBinaryShortSparseData(xhr.response, name);
+      } else {
+        loadBinaryData(xhr.response, name);
+      }
     } else {
       console.warning("failed to load requested file (status: %d)", xhr.status);
       console.trace();
@@ -1060,6 +1102,8 @@ function main() {
   useBivariate = true;
   
   populateSuperZoom();
+  
+  loadExtraData();
   
   changeColormap();
   gl.ondraw();

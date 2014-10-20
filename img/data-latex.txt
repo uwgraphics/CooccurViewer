@@ -1,0 +1,2 @@
+\dfrac{\Pr (j_{\textrm{variant}} \wedge i_{\textrm{variant}})}{\Pr (i_{\textrm{variant}})}
+
