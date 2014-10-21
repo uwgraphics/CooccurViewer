@@ -902,6 +902,70 @@ var updateLegend = function() {
     }
 };
 
+
+var detailSVG = d3.select("#detail")
+  .append('g')
+    .attr('transform', 'translate(10, 10)');
+
+var updateDetail = function() {
+  var getTotalReadsInPair = function(data) { 
+    var totalReads = 0;
+    data.forEach(function(d) {
+      var foundReads = d.var + d.modal;
+      if (totalReads && foundReads != totalReads) {
+        console.error("error in counts; the total reads for i (%d) doesn't match j (%d)", totalReads, foundReads);
+      }
+      
+      totalReads = foundReads;
+    });
+    
+    console.log("found %d reads", totalReads);
+    return totalReads;
+  };
+  
+  var exData = [
+    {"pos": 3421, "var": 42, "modal": 296},
+    {"pos": 3500, "var": 10, "modal": 328}
+  ];
+  
+  var svgWidth = 250, svgHeight = 150;
+  
+  var margin = 10;
+  var effWidth = svgWidth - margin * 2;
+  var effHeight = svgHeight - margin * 2;
+  
+  var barHeight = effHeight / 2;
+  
+  var x = d3.scale.linear()
+    .domain([0, getTotalReadsInPair(exData)])
+    .range([0, effWidth]);
+  
+  var bar = detailSVG.selectAll("g")
+    .data(exData)
+    .enter().append('g')
+      .attr('transform', function(d, i) {
+        return "translate(0," + i * barHeight + ")";
+      });
+    
+  // append the modal stuff
+  bar.selectAll('rect.modal')
+    .data(function(d) { return d.modal; })
+    .enter().append('rect')
+      .attr('class', 'modal')
+      .attr('width', function(d) { return x(d.modal); })
+      .attr('height', barHeight - 5);
+    
+  // append the variant stuff
+  bar.selectAll('rect.var')
+    .data(function(d) { return d.var; })
+    .enter().append('rect')
+      .attr('class', 'var')
+      .attr('x', function(d) { return x(d.modal); })
+      .attr('width', function(d) { return x(d.var); })
+      .attr('height', barHeight - 5);
+};
+  
+
 // ## Handlers for mouse-interaction
 // Handle panning the canvas.
 var panX, panY;

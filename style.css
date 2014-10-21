@@ -80,14 +80,33 @@ svg#legend {
 	left: 875px;
 }
 
-svg#legend .axis path,
-svg#legend .axis line {
+svg#detail {
+	box-sizing: content-box;
+	border: 1px solid #000;
+	height: 150px;
+	width: 250px;
+	z-index: -20;
+	position: absolute;
+	top: 600px;
+	left: 875px;
+}
+
+#detail .modal {
+	fill: #0f0;
+}
+
+#detail .var {
+	fill: #f00;
+}
+
+svg .axis path,
+svg .axis line {
 	fill: none;
 	stroke: #000;
 	shape-rendering: crispEdges;
 }
 
-svg#legend .axis text {
+svg .axis text {
 	font-family: sans-serif;
 	font-size: 11px;
 }
@@ -98,7 +117,7 @@ svg#legend .axis text {
 	width: 300px;
 	position: absolute;
 	left: 850px;
-	top: 600px;
+	top: 775px;
 	padding: 15px;
 }
 
