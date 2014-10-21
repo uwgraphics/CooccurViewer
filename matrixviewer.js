@@ -947,22 +947,20 @@ var updateDetail = function() {
         return "translate(0," + i * barHeight + ")";
       });
     
-  // append the modal stuff
-  bar.selectAll('rect.modal')
-    .data(function(d) { return d.modal; })
-    .enter().append('rect')
-      .attr('class', 'modal')
-      .attr('width', function(d) { return x(d.modal); })
-      .attr('height', barHeight - 5);
-    
   // append the variant stuff
-  bar.selectAll('rect.var')
-    .data(function(d) { return d.var; })
-    .enter().append('rect')
-      .attr('class', 'var')
-      .attr('x', function(d) { return x(d.modal); })
-      .attr('width', function(d) { return x(d.var); })
-      .attr('height', barHeight - 5);
+  bar.append('rect')
+    .attr('class', 'pos-var')
+    .attr('x', function(d) { return x(d.modal); })
+    .attr('width', function(d) { return x(d.var); })
+    .attr('height', barHeight - 5);
+    
+  // append the modal stuff
+  bar.append('rect')
+    .attr('class', 'pos-modal')
+    .attr('x', 0)
+    .attr('width', function(d) { return x(d.modal); })
+    .attr('height', barHeight - 5);
+    
 };
   
 

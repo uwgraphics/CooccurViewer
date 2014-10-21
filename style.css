@@ -91,11 +91,11 @@ svg#detail {
 	left: 875px;
 }
 
-#detail .modal {
+#detail .pos-modal {
 	fill: #0f0;
 }
 
-#detail .var {
+#detail .pos-var {
 	fill: #f00;
 }
 
