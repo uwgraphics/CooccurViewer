@@ -385,6 +385,41 @@ var getColorFromDataValue = function(value) {
   return arr;
 };
 
+// gets the variance matrix from positions i,j
+// returns [modali_modalj, modali_varj, vari_modalj, vari_varj]
+var getVarianceMatrixFromPositions = function(i, j, name) {
+  var ret = {};
+  
+  ret['i'] = +i;
+  ret['j'] = +j;
+  
+  name = name || "varCounts";
+  if (!ds.ready[name]) {
+    console.warn("getVarianceMatrixFromPositions() called before %s dataset ready", name);
+    return false;
+  }
+  
+  var wIndex = Math.floor(ds.numWindow / 2) + (j - i)
+  if (wIndex < 0 || wIndex >= ds.numWindow) {
+    console.warn("tried to access out of bounds counts from %s: (%d, %d), windowIndex: %d", name, i, j, wIndex);
+    return false;
+  }
+  
+  // four values per pair of positions
+  var curIndex = (i * ds.numWindow + wIndex) * 4;
+  
+  for (var n = 0; n < 4; n++) {
+    ret[n] = ds.metrics[name][curIndex + n];
+  }
+  
+  ret['modali_modalj'] = ds.metrics[name][curIndex];
+  ret['modali_varj']   = ds.metrics[name][curIndex + 1];
+  ret['vari_modalj']   = ds.metrics[name][curIndex + 2];
+  ret['vari_varj']     = ds.metrics[name][curIndex + 3];
+  
+  return ret;
+};
+
 // gets the currently selected buffers and creates a lightgl-compatible array
 // for passing to `GL.Shader.drawBuffers();`.
 var getCurrentBuffers = function() {
@@ -923,10 +958,36 @@ var updateDetail = function() {
     return totalReads;
   };
   
+  // for each position, condition on the other position and what this
+  // position reads looks like
+  var parseMetadata = function(data) {
+    var ret = [];
+    
+    ret[0] = {};
+    ret[0]['pos'] = data.i;
+    ret[0]['modal'] = data.modali_modalj + data.modali_varj;
+    ret[0]['var'] = data.vari_modalj + data.vari_varj;
+    ret[0]['ovar_var'] = data.vari_varj;
+    ret[0]['omodal_var'] = data.vari_modalj;
+    
+    ret[1] = {};
+    ret[1]['pos'] = data.j;
+    ret[1]['modal'] = data.modali_modalj + data.vari_modalj;
+    ret[1]['var'] = data.modali_varj + data.vari_varj;
+    ret[1]['ovar_var'] = data.vari_varj;
+    ret[1]['omodal_var'] = data.modali_varj;
+    
+    return ret;
+  };
+  
+  var matrixData = getVarianceMatrixFromPositions(3421, 3500);
+  var exData = parseMetadata(matrixData);
+  
+  /*
   var exData = [
     {"pos": 3421, "var": 42, "modal": 296},
     {"pos": 3500, "var": 10, "modal": 328}
-  ];
+  ];*/
   
   var svgWidth = 250, svgHeight = 150;
   
@@ -952,14 +1013,14 @@ var updateDetail = function() {
     .attr('class', 'pos-var')
     .attr('x', function(d) { return x(d.modal); })
     .attr('width', function(d) { return x(d.var); })
-    .attr('height', barHeight - 5);
+    .attr('height', barHeight - 15);
     
   // append the modal stuff
   bar.append('rect')
     .attr('class', 'pos-modal')
     .attr('x', 0)
     .attr('width', function(d) { return x(d.modal); })
-    .attr('height', barHeight - 5);
+    .attr('height', barHeight - 15);
     
 };
   
