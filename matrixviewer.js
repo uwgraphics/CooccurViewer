@@ -42,6 +42,11 @@ var screenOffset = [0, 0];
 var scale = 1;
 var offset = [0, 0];
 
+// interaction state
+var freezeZoom = false;
+var detailPos = [3421, 3500];
+var superZoomPos = [0, 0];
+
 // general function to read in binary data
 // assumes three header ints:
 // <window_size> <num_pos> <num-values-per-datapoint>
@@ -778,6 +783,20 @@ var updateAxisLabels = function() {
   }
 };
 
+var handleSuperZoomClick = function() {
+  // assume `this` is the div in the superZoom was clicked...
+  // first, determine which child this is
+  var i = Array.prototype.indexOf.call(this.parentNode.children, this);
+  
+  // get the offset from the center pixel
+  var dx = (i % 3) - 1;
+  var dy = Math.floor(i / 3) - 1;
+  
+  // set the detail position and call the function to update the detail view
+  detailPos = [superZoomPos[0] + dx, superZoomPos[1] + dy];
+  updateDetail();
+};
+
 var populateSuperZoom = function() {
   var sZContainer = document.getElementById("super-zoom");
   var colors = colorbrewer.Pastel1['9'];
@@ -786,6 +805,7 @@ var populateSuperZoom = function() {
     newPixel.className = "pixel" + i;
     newPixel.style.backgroundColor = colors[i];
     sZContainer.appendChild(newPixel);
+    newPixel.addEventListener('click', handleSuperZoomClick);
     
     var newValue = document.createElement("span");
     newValue.className = "val";
@@ -800,7 +820,7 @@ var populateSuperZoom = function() {
 };
 
 var updateSuperZoom = function() {
-  var dataCoords = convertScreenToDataCoords();
+  superZoomPos = convertScreenToDataCoords();
   
   var sZContainer = document.getElementById("super-zoom");
   for (var i = 0; i < 9; i++) {
@@ -809,8 +829,8 @@ var updateSuperZoom = function() {
     var dx = (i % 3) - 1;
     var dy = Math.floor(i / 3) - 1;
     
-    var x = dataCoords[0] + dx;
-    var y = dataCoords[1] + dy;
+    var x = superZoomPos[0] + dx;
+    var y = superZoomPos[1] + dy;
     
     var curVal = getDataValueFromAbsolutePosition(x, y);
     
@@ -945,7 +965,7 @@ var updateLegend = function() {
 
 var detailSVG = d3.select("#detail")
   .append('g')
-    .attr('transform', 'translate(25, 10)');
+    .attr('transform', 'translate(25, 20)')
 
 var updateDetail = function() {
   var getTotalReadsInPair = function(data) { 
@@ -986,17 +1006,13 @@ var updateDetail = function() {
   };
   
   var handleCondClick = function(thisRect, isVarRect) {
-    var curLabel, curRect, otherLabel, otherRect;
+    var curLabel, otherLabel;
     if (isVarRect) {
       curLabel = '.label-var';
-      curRect = '.pos-var';
       otherLabel = '.label-modal';
-      otherRect = '.pos-modal';
     } else {
       curLabel = '.label-modal';
-      curRect = '.pos-modal';
       otherLabel = '.label-var';
-      otherRect = '.pos-var';
     }
     
     // immediately give this rectangle a class so we can disambiguate
@@ -1025,7 +1041,6 @@ var updateDetail = function() {
       
     d3.select(parentGrpNode).selectAll(otherLabel)
       .text("");
-      
     
     // get the rectangles to update
     var toUpdate = d3.selectAll('g.distribution')
@@ -1037,52 +1052,56 @@ var updateDetail = function() {
       .range([0, effWidth]);
       
     // update the modal stuff
-    var condVarReads = isVarRect ? d.ovar_var : d.omodal_var;
-    var condModalReads = isVarRect ? 
-      totalCondReads - d.ovar_var : totalCondReads - d.omodal_var;
+    var condVarReads = function(d) {
+      return isVarRect ? d.ovar_var : d.omodal_var
+    };
+    
+    var condModalReads = function(d) {
+      return isVarRect ? 
+        totalCondReads - d.ovar_var : totalCondReads - d.omodal_var;
+    };
     
     toUpdate.selectAll('.pos-modal')
       .transition().delay(300)
-      .attr('width', function(d) { return cond_x(condModalReads); });
+      .attr('width', function(d) { return cond_x(condModalReads(d)); });
       
     toUpdate.selectAll('.label-modal')
       .transition().delay(300)
-      .text(function(d) { return (condModalReads); });
+      .text(function(d) { return (condModalReads(d)); });
     
     toUpdate.selectAll('.pos-var')
       .transition().delay(300)
-      .attr('x', function(d) { return cond_x(condModalReads); })
-      .attr('width', function(d) { return cond_x(condVarReads); });
+      .attr('x', function(d) { return cond_x(condModalReads(d)); })
+      .attr('width', function(d) { return cond_x(condVarReads(d)); });
       
     toUpdate.selectAll('.label-var')
       .transition().delay(300)
-      .attr('x', function(d) { return cond_x(condModalReads); })
-      .text(function(d) { return condVarReads; });
+      .attr('x', function(d) { return cond_x(condModalReads(d)); })
+      .text(function(d) { return condVarReads(d); });
   }
   
-  var matrixData = getVarianceMatrixFromPositions(3421, 3500);
-  var exData = parseMetadata(matrixData);
+  // remove any existing elements
+  d3.selectAll('g.distribution').remove();
   
-  /*
-  var exData = [
-    {"pos": 3421, "var": 42, "modal": 296},
-    {"pos": 3500, "var": 10, "modal": 328}
-  ];*/
+  var matrixData = getVarianceMatrixFromPositions(detailPos[0], detailPos[1]);
+  if (matrixData === false) {
+    console.error("failed to load variance matrix data for %d, %d", detailPos[0], detailPos[1]);
+    return;
+  }
+  
+  var exData = parseMetadata(matrixData);
   
   var svgWidth = 250, svgHeight = 150;
   
   var margin = 10;
   var effWidth = svgWidth - 25 - margin;
-  var effHeight = svgHeight - margin * 2;
+  var effHeight = svgHeight - margin;
   
   var barHeight = effHeight / 2;
   
   var x = d3.scale.linear()
     .domain([0, getTotalReadsInPair(exData)])
     .range([0, effWidth]);
-    
-  // LOLZ
-  d3.selectAll('g.distribution').remove();
   
   var bar = detailSVG.selectAll("g")
     .data(exData)
@@ -1097,66 +1116,14 @@ var updateDetail = function() {
     .attr('class', 'pos-var')
     .attr('x', function(d) { return x(d.modal); })
     .attr('width', function(d) { return x(d.var); })
-    .attr('height', barHeight - 15)
-    .on('click', function() {      
-      // immediately give this a class so we can disambiguate
-      d3.select(this).classed("conditioned");
-      var condElement = this;
-      var totalCondReads = d3.select(this).datum().var;
-      
-      // this can't be the most d3-ish way to do this...
-      var parentGrpNode = d3.select(this)[0][0].parentNode;
-      d3.select(parentGrpNode).selectAll('rect')
-        .transition().duration(250)
-        .attr('width', 0)
-        .attr('x', 0);
-        
-      // expand the clicked-on element to take up the full width
-      d3.select(this)
-        .transition().duration(250)
-        .attr('width', effWidth)
-        .attr('x', 0);
-      
-      // move labels as well
-      d3.select(parentGrpNode).selectAll('.label-var')
-        .transition().duration(250)
-        .attr('x', 0);  
-        
-      d3.select(parentGrpNode).selectAll('.label-modal')
-        .text("");
-        
-      
-      // get the rectangles to update
-      var toUpdate = d3.selectAll('g.distribution')
-        .filter(function() { return this !== parentGrpNode; })
-        
-      // make a new scale based on totalCondReads
-      var cond_x = d3.scale.linear()
-        .domain([0, totalCondReads])
-        .range([0, effWidth]);
-        
-      // update the modal stuff
-      toUpdate.selectAll('.pos-modal')
-        .transition().delay(300)
-        .attr('width', function(d) { return cond_x(totalCondReads - d.ovar_var); });
-        
-      toUpdate.selectAll('.label-modal')
-        .transition().delay(300)
-        .text(function(d) { return (totalCondReads - d.ovar_var); });
-      
-      toUpdate.selectAll('.pos-var')
-        .transition().delay(300)
-        .attr('x', function(d) { return cond_x(totalCondReads - d.ovar_var); })
-        .attr('width', function(d) { return cond_x(d.ovar_var); });
-        
-      toUpdate.selectAll('.label-var')
-        .transition().delay(300)
-        .attr('x', function(d) { return cond_x(totalCondReads - d.ovar_var); })
-        .text(function(d) { return d.ovar_var; });
+    .attr('height', barHeight - 20)
+    .on('click', function() {
+      handleCondClick(this, true);
     });
     
   bar.append('text')
     .attr('class', 'label-var')
+    .attr('y', -3)
     .attr('x', function(d) { return x(d.modal); })
     .text(function(d) { return d.var; });
     
@@ -1165,10 +1132,14 @@ var updateDetail = function() {
     .attr('class', 'pos-modal')
     .attr('x', 0)
     .attr('width', function(d) { return x(d.modal); })
-    .attr('height', barHeight - 15);
+    .attr('height', barHeight - 20)
+    .on('click', function() {
+      handleCondClick(this, false);
+    });
     
   bar.append('text')
     .attr('class', 'label-modal')
+    .attr('y', -3)
     .attr('x', 0)
     .text(function(d) { return d.modal; });
     
@@ -1179,8 +1150,6 @@ var updateDetail = function() {
     .attr('transform', "rotate(270, -5, " + ((barHeight - 15)/2) + ")")
     .style('text-anchor', 'middle')
     .text(function(d) { return d.pos; });
-  
-  
 };
   
 
@@ -1197,7 +1166,13 @@ gl.onmousedown = function(e) {
     setCleanXInput(panX);
     updateAxisLabels();
     gl.ondraw();
-  } 
+  }
+
+  // (un-)freeze the zoom
+  if (e.which == 1 && e.y > topMargin) {
+    updateSuperZoom();
+    freezeZoom = !freezeZoom;
+  }
 };
 
 gl.onmousemove = function(e) {
@@ -1210,7 +1185,8 @@ gl.onmousemove = function(e) {
       updateAxisLabels();
       gl.ondraw();
     }
-  } else if (ds.ready[ds.curMetric] && $("#dodiagonal").prop('checked')) {
+  } else if (ds.ready[ds.curMetric] && $("#dodiagonal").prop('checked') 
+             && !freezeZoom) {
     if (e.y <= topMargin) {
       // blank out super-zoom
       var superPixels = document.getElementById("super-zoom").children;

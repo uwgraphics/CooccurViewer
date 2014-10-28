@@ -29,7 +29,7 @@ canvas {
 	border: 1px solid #000;
 	height: 300px;
 	width: 300px;
-	z-index: -20;
+	z-index: 20;
 	position: absolute;
 	top: 0px;
 	left: 850px;
