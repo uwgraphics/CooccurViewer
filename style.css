@@ -85,18 +85,18 @@ svg#detail {
 	border: 1px solid #000;
 	height: 150px;
 	width: 250px;
-	z-index: -20;
+	z-index: 20;
 	position: absolute;
 	top: 600px;
 	left: 875px;
 }
 
 #detail .pos-modal {
-	fill: #0f0;
+	fill: #7fc97f;
 }
 
 #detail .pos-var {
-	fill: #f00;
+	fill: #fdc086;
 }
 
 svg .axis path,
