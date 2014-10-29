@@ -76,7 +76,7 @@ svg#legend {
 	width: 250px;
 	z-index: -20;
 	position: absolute;
-	top: 325px;
+	top: 500px;
 	left: 875px;
 }
 
@@ -84,11 +84,11 @@ svg#detail {
 	box-sizing: content-box;
 	border: 1px solid #000;
 	height: 150px;
-	width: 250px;
+	width: 260px;
 	z-index: 20;
 	position: absolute;
-	top: 600px;
-	left: 875px;
+	top: 325px;
+	left: 870px;
 }
 
 #detail .pos-modal {

@@ -418,10 +418,6 @@ var getVarianceMatrixFromPositions = function(i, j, name) {
   // four values per pair of positions
   var curIndex = (i * ds.numWindow + wIndex) * 4;
   
-  for (var n = 0; n < 4; n++) {
-    ret[n] = ds.metrics[name][curIndex + n];
-  }
-  
   ret['modali_modalj'] = ds.metrics[name][curIndex];
   ret['modali_varj']   = ds.metrics[name][curIndex + 1];
   ret['vari_modalj']   = ds.metrics[name][curIndex + 2];
