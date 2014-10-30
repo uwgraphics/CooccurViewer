@@ -227,9 +227,12 @@
             // update the current button text
             $("#currentDataset").html(curDataset);
             
-            // TODO: actually load the dataset
-            //loadDataset(datasets[curDataset]);
+            // actually load the dataset (matrixviewer.js)
+            loadDataset(curDataset, datasets[curDataset]);
         };
+        
+        // prepare the WebGL canvas (in matrixviewer.js)
+        setup();
         
         $.getJSON("definedData.json", function(data, status) {
             datasets = data.datasets;        
@@ -242,6 +245,8 @@
                 console.log("found dataset " + dataset);
                 $("#datasetOptions").append('<li><a href="#' + dataset + '">' + dataset + '</a></li>');
             }
+            
+            checkHash();
         });
     </script>
 

@@ -5,7 +5,7 @@ var gl = GL.create({width: 800, height: 800});
 var isoluminantRdBu = ["#EC7B8B", "#FF696B", "#F07C68", "#D38D6D", "#B59887", "#9E9E9E", "#8FA0AA", "#75A4BB", "#59A6D4", "#68A0E8", "#829ED9"];
 var isoluminantRdBuFixedWhite = ["#EC7B8B", "#FF696B", "#F07C68", "#D38D6D", "#B59887", "#FFFFFF", "#8FA0AA", "#75A4BB", "#59A6D4", "#68A0E8", "#829ED9"];
 
-window.onload = main;
+// window.onload = main;
 
 var timer = null;
 
@@ -24,6 +24,8 @@ var chosenColormap;
 var colormapRGBA;
 var colormapTexture;
 var colormapWidth = 0;
+
+var dataDir = "";
 
 var ds = {
   metrics: [],       // holds the raw dat for all metrics
@@ -640,7 +642,7 @@ gl.ondraw = function() {
   }
   
   
-  loadExtraData();
+  //loadExtraData();
   
   constructOverviewTexture();
   
@@ -1278,7 +1280,7 @@ var makeBinaryFileRequest = function(filename, name, doShort) {
   xhr.send(null);
 };
 
-function main() {
+function setup() {
   gl.canvas.id = "webglcanvas";
   var canvasContainer = document.getElementById("canvas-container");
   canvasContainer.insertBefore(gl.canvas, canvasContainer.children[0]);
@@ -1342,24 +1344,55 @@ function main() {
     
     // check if this data has been loaded already
     if (!ds.ready[filename]) {
-      makeBinaryFileRequest(filename);
+      makeBinaryFileRequest(dataDir + filename, filename);
     }
     
     ds.curMetric = filename;
     gl.ondraw();
   });
   
-  makeBinaryFileRequest('readBreadth.dat', 'depth');
-  makeBinaryFileRequest('conjProbDiff.dat');
-  
-  ds.curAttenuation = 'depth';
-  ds.curMetric = 'conjProbDiff.dat';
-  useBivariate = true;
-  
   populateSuperZoom();
   
-  loadExtraData();
-  
+  useBivariate = true;
   changeColormap();
+  
+  // gl.ondraw(); 
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+};
+
+// `datasetObj` is an object with the fields `attenuation`, `metrics` (array of 
+// metric files), `variantCounts` denoting data files.  
+var loadDataset = function(datasetName, datasetObj) {
+  console.log("loading dataset " + datasetName + " into view");
+  
+  // do some REALLY rudimentary resetting of state 
+  // (should WebGL buffers be explicitly deleted?)
+  ds.numPos = 0;
+  ds.numWindow = 0;
+  if (ds.curMetric) ds.ready[ds.curMetric] = false;
+  if (ds.curAttenuation) ds.ready[ds.curAttenuation] = false;
+  
+  dataDir = "data/" + datasetName + "/";
+  
+  // make the requests for the primary metric and attenuation files
+  makeBinaryFileRequest(dataDir + datasetObj['attenuation'], datasetObj['attenuation']);
+  makeBinaryFileRequest(dataDir + datasetObj['metrics'][0], datasetObj['metrics'][0]);
+  
+  // make the request for the variantCount data (as shorts instead of floats)
+  makeBinaryFileRequest(dataDir + datasetObj['variantCounts'], "varCounts", true); 
+  // loadExtraData();
+  
+  // load the metrics into the dropdown
+  $("#metrics").html("");
+  datasetObj['metrics'].forEach(function(d,i) {
+    $("#metrics").append("<option>" + d +  "</option>");
+  });
+  
+  // set the current display datasets
+  ds.curAttenuation = datasetObj['attenuation'];
+  ds.curMetric = datasetObj['metrics'][0];
+  
+  // finally, force the visualization to draw (will poll until data is ready)
   gl.ondraw();
 };
