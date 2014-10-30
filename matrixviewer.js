@@ -1168,6 +1168,7 @@ gl.onmousedown = function(e) {
   if (e.which == 1 && e.y > topMargin) {
     updateSuperZoom();
     freezeZoom = !freezeZoom;
+    $("#super-zoom").toggleClass("frozen");
   }
 };
 

@@ -69,6 +69,21 @@ canvas {
 	/*margin-top:10px;*/
 }
 
+/* support a blinky animation to show that the super-zoom is frozen */
+@keyframes myblink {
+	50% { border-color: #fff; }
+}
+
+@-webkit-keyframes myblink {
+	50% { border-color: #fff; }
+}
+
+.frozen {
+	border: 3px solid #000;
+	animation: myblink .5s infinite;
+	-webkit-animation: myblink .5s infinite;
+}
+
 svg#legend {
 	box-sizing: content-box;
 	border: 1px solid #000;
