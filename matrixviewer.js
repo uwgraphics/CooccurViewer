@@ -441,7 +441,7 @@ var getCurrentBuffers = function() {
 
 // TODO: shader doesn't support non-colorbrewer coloring mode
 var constructOverviewTexture = function() {
-  console.time("constructing overview texture using WebGL drawing");
+  //console.time("constructing overview texture using WebGL drawing");
   
   // if the texture already exists, use it
   var curTexture = $("#usecolorbrewer").prop('checked') ? "lightOver" : "colorOver";
@@ -489,7 +489,7 @@ var constructOverviewTexture = function() {
   topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
   updateAxisLabels();
   
-  console.timeEnd("constructing overview texture using WebGL drawing");
+  //console.timeEnd("constructing overview texture using WebGL drawing");
 };
 
 var setInitBounds = function() {
@@ -641,12 +641,9 @@ gl.ondraw = function() {
     createTextures();
   }
   
-  
-  //loadExtraData();
+  console.time("gl.ondraw()");
   
   constructOverviewTexture();
-  
-  console.time("gl.ondraw()");
   
   // based on screenOffset, update the overview indicator
   updateIndicator();

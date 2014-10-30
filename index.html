@@ -211,25 +211,37 @@
         var curDataset = "";
         var datasets;
         
+        var ignoreHashChange = false;
+        
         var checkHash = function() {
-            if (window.location.hash) {
-                curDataset = window.location.hash.substring(1);
-            } else {
-                // no datasets have been defined
-                if (Object.keys(datasets) == 0) {
-                    console.error("no dataset has been defined, quitting.");
-                    return;
+            if (ignoreHashChange === false) {
+                if (window.location.hash) {
+                    curDataset = window.location.hash.substring(1);
+                } else {
+                    // no datasets have been defined
+                    if (Object.keys(datasets) == 0) {
+                        console.error("no dataset has been defined, quitting.");
+                        return;
+                    }
+                    
+                    // update the hash
+                    ignoreHashChange = true;
+                    curDataset = Object.keys(datasets)[0];
                 }
                 
-                curDataset = Object.keys(datasets)[0];
+                // update the current button text
+                $("#currentDataset").html(curDataset);
+                
+                // actually load the dataset (matrixviewer.js)
+                loadDataset(curDataset, datasets[curDataset]);
             }
             
-            // update the current button text
-            $("#currentDataset").html(curDataset);
-            
-            // actually load the dataset (matrixviewer.js)
-            loadDataset(curDataset, datasets[curDataset]);
+            // if `ignoreHashChange` was true, set it to `false` for the next call
+            ignoreHashChange = false;
         };
+        
+        // add a hashchange listener to the URL (e.g. viewer clicks on dropdown item)
+        window.addEventListener("hashchange", checkHash, false);
         
         // prepare the WebGL canvas (in matrixviewer.js)
         setup();
