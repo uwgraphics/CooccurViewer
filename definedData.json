@@ -1,0 +1,21 @@
+{
+	"datasets": {
+    "SHFVkrc1_RC06": {
+      "attenuation": "readBreadth.dat",
+      "metrics": [
+        "conjProbDiff.dat",
+        "conjProbDiff-old.dat",
+        "conjProbDiff-ratio.dat"
+      ],
+      "variantCounts": "variantCounts.dat"
+    }, 
+    "SHIV_nef": {
+      "attenuation": "readBreadth.dat",
+      "metrics": [
+        "conjProbDiff.dat",
+        "conjProbDiff-ratio.dat"
+      ],
+      "variantCounts": "variantCounts.dat"
+    }
+  }
+}

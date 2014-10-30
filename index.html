@@ -32,7 +32,22 @@
         </div>
         <div class="collapse navbar-collapse" id="navbar-collapse-1">
             <ul class="nav navbar-nav">
-                <li><a href="#" data-toggle="modal" data-target="#faq">How to use</a>
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#faq">How to use</a>
+                </li>
+                <li>
+                    <div class="btn-group" id="datasetChooser">
+                        <button type="button" class="btn btn-primary navbar-btn" id="currentDataset">SHFV</button>
+                        <button type="button" class="btn btn-primary navbar-btn dropdown-toggle" data-toggle="dropdown">
+                            <span class="caret"></span>
+                            <span class="sr-only">Toggle Dropdown</span>
+                        </button>
+                        <ul class="dropdown-menu" role="menu" id="datasetOptions">
+                            <li><a href="#">SHFV</a></li>
+                            <li><a href="#">SHIV</a></li>
+                        </ul>
+                    </div>
+                </li>
             </ul>
             
             <p class="navbar-text navbar-right"><small>
@@ -190,6 +205,45 @@
     <!--<script type="text/javascript" src="bitmap.js"></script>-->
     <script type="text/javascript" src="colorbrewer.js"></script>
     <script type="text/javascript" src="matrixviewer.js"></script>
+    
+    <script type="text/javascript">
+        // handle loading dataset definitions in and looking at the hash
+        var curDataset = "";
+        var datasets;
+        
+        var checkHash = function() {
+            if (window.location.hash) {
+                curDataset = window.location.hash.substring(1);
+            } else {
+                // no datasets have been defined
+                if (Object.keys(datasets) == 0) {
+                    console.error("no dataset has been defined, quitting.");
+                    return;
+                }
+                
+                curDataset = Object.keys(datasets)[0];
+            }
+            
+            // update the current button text
+            $("#currentDataset").html(curDataset);
+            
+            // TODO: actually load the dataset
+            //loadDataset(datasets[curDataset]);
+        };
+        
+        $.getJSON("definedData.json", function(data, status) {
+            datasets = data.datasets;        
+            
+            // clear out dataset options
+            $("#datasetOptions").html("");
+            
+            // populate the button options
+            for (dataset in datasets) {
+                console.log("found dataset " + dataset);
+                $("#datasetOptions").append('<li><a href="#' + dataset + '">' + dataset + '</a></li>');
+            }
+        });
+    </script>
 
 </body>
 </html>
