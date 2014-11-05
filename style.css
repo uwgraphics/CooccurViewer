@@ -18,6 +18,27 @@ canvas {
 	margin: -12px 7px 0 0;
 }
 
+#loading {
+	border: 1px solid #000;
+	height: 800px;
+	width: 800px;
+	position: absolute;
+	left: 15px;
+	border: 1px solid #000;
+	box-sizing: content-box;
+	background: #eee url("img/loading.gif") no-repeat scroll center center;
+}
+
+#status {
+	position: absolute;
+	top: 425px;
+	left: 200px;
+	text-align: center;
+	font-weight: 600;
+	color: #E28A36;
+	width: 400px;
+}
+
 #img-container img {
 	display: none;
 	margin: 20px auto;

@@ -13,9 +13,19 @@
       "attenuation": "readBreadth.dat",
       "metrics": [
         "conjProbDiff.dat",
+		"conjProbDiff-gated10.dat",
         "conjProbDiff-ratio.dat"
       ],
       "variantCounts": "variantCounts.dat"
-    }
+    },
+	"sampledata": {
+      "attenuation": "readBreadth.dat",
+      "metrics": [
+        "conjProbDiff.dat",
+		"conjProbDiff-outliers.dat",
+        "conjProbDiff-ratio.dat"
+      ],
+      "variantCounts": "variantCounts.dat"
+	}
   }
 }

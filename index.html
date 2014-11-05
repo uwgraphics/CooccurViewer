@@ -36,9 +36,9 @@
                     <a href="#" data-toggle="modal" data-target="#faq">How to use</a>
                 </li>
                 <li>
-                    <div class="btn-group" id="datasetChooser">
-                        <button type="button" class="btn btn-primary navbar-btn" id="currentDataset">SHFV</button>
-                        <button type="button" class="btn btn-primary navbar-btn dropdown-toggle" data-toggle="dropdown">
+                    <div class="btn-group navbar-btn" id="datasetChooser">
+                        <button type="button" class="btn btn-primary" id="currentDataset">SHFV</button>
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown">
                             <span class="caret"></span>
                             <span class="sr-only">Toggle Dropdown</span>
                         </button>
@@ -61,15 +61,16 @@
     <div class="row" style="height: 900px;">
         <!-- canvas(es) will be added here -->
         <div class="col-sm-12" id="canvas-container">
+            <div id="loading">
+                <span id="status">Loading components...</span>
+            </div>
             <div id="canvas-labels">
                 <div id="label-xmin"></div>
                 <div id="label-xmax"></div>
                 <div id="label-ymin"></div>
                 <div id="label-ymax"></div>
             </div>
-            <div id="super-zoom">
-            
-            </div>
+            <div id="super-zoom"></div>
             <svg id="detail" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"></svg>
             <svg id="legend" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"></svg>
             <div id="chooser">

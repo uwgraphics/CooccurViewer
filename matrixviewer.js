@@ -452,8 +452,12 @@ var constructOverviewTexture = function() {
     return;
   }
   
+  // for datasets with numPos less than gl.canvas.width, force to still 
+  // draw a rectangle (e.g. don't let texHeight go too high)
+  var effNumPos = Math.max(ds.numPos, gl.canvas.width);
+  
   if (!textures[curTexture]) {
-    var texHeight = gl.canvas.width * ds.numWindow / ds.numPos
+    var texHeight = gl.canvas.width * ds.numWindow / effNumPos;
     textures[curTexture] = new GL.Texture(gl.canvas.width, texHeight);
   }
   
@@ -471,7 +475,7 @@ var constructOverviewTexture = function() {
     colormapTexture.bind(0);
     
     shaders['fillOverview'].uniforms({
-      dataSize: [ds.numPos, ds.numWindow],
+      dataSize: [effNumPos, ds.numWindow],
       minVal: ds.bounds[ds.curMetric][0][0],
       maxVal: ds.bounds[ds.curMetric][0][1],
       maxAtten: ds.bounds[ds.curAttenuation][0][1],
@@ -486,7 +490,8 @@ var constructOverviewTexture = function() {
   });
   
   // compute how many y-pixels the overview + indicator takes up
-  topMargin = Math.floor((ds.numWindow / ds.numPos) * gl.canvas.width) + indicatorHeight + 1;
+  topMargin = Math.floor((ds.numWindow / effNumPos) * gl.canvas.width) + indicatorHeight + 1;
+  
   updateAxisLabels();
   
   //console.timeEnd("constructing overview texture using WebGL drawing");
@@ -567,8 +572,8 @@ var createTextures = function() {
   // size the overview rectangle to not skew overview data
   overview = new GL.Mesh.plane();
   
-  y_min = 1 - ((ds.numWindow / ds.numPos) * 2);
-  //y_min = 1 - ((textures['full'].height / textures['full'].width) * 2);
+  // force minimium height if numPos < gl.canvas.width
+  y_min = 1 - ((ds.numWindow / Math.max(ds.numPos, gl.canvas.width)) * 2);
   overview.vertices[0][1] = y_min;
   overview.vertices[1][1] = y_min;
   
@@ -641,6 +646,8 @@ gl.ondraw = function() {
     createTextures();
   }
   
+  hideLoading();
+  
   console.time("gl.ondraw()");
   
   constructOverviewTexture();
@@ -648,7 +655,7 @@ gl.ondraw = function() {
   // based on screenOffset, update the overview indicator
   updateIndicator();
   
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clearColor(0.9, 0.9, 0.9, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   
   gl.enable(gl.DEPTH_TEST);
@@ -1213,9 +1220,24 @@ var mwheel = function(e, delta, deltaX, deltaY) {
   var x = e.offsetX;
   var y = gl.canvas.height - e.offsetY;
   
+  var oldScale = scale;  
   scale = deltaY > 0 ? scale * 2 : scale / 2;
   
+  var actualPos = (Math.abs(screenOffset[0]) + x / oldScale);
+  var newStart = actualPos - (x / scale);
+  screenOffset[0] = -1 * Math.floor(newStart);
+  
   gl.ondraw();
+};
+
+var updateLoadingStatus = function(msg) {
+  $("#loading").show();
+  $("#status").html(msg);
+};
+
+var hideLoading = function() {
+  $("#loading").hide();
+  $("#status").html("");
 };
 
 // Function to handle asynchronous loading and compilation of shaders.
@@ -1361,12 +1383,14 @@ function setup() {
 // `datasetObj` is an object with the fields `attenuation`, `metrics` (array of 
 // metric files), `variantCounts` denoting data files.  
 var loadDataset = function(datasetName, datasetObj) {
+  updateLoadingStatus("loading dataset " + datasetName + " into view...");
   console.log("loading dataset " + datasetName + " into view");
   
   // do some REALLY rudimentary resetting of state 
   // (should WebGL buffers be explicitly deleted?)
   ds.numPos = 0;
   ds.numWindow = 0;
+  texturesCreated = false;
   if (ds.curMetric) ds.ready[ds.curMetric] = false;
   if (ds.curAttenuation) ds.ready[ds.curAttenuation] = false;
   
