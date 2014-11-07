@@ -236,6 +236,16 @@ var loadBinaryShortSparseData = function(data, name) {
   */
   
   // bind a buffer? probably not yet
+  // JUST KIDDING, DO IT NOW
+  ds.buffers[name] = new GL.Buffer(gl.ARRAY_BUFFER, Int16Array);
+  ds.buffers[name].buffer = gl.createBuffer();
+  ds.buffers[name].buffer.length = ds.numPos * ds.numWindow * thisSpacing;
+  ds.buffers[name].buffer.spacing = thisSpacing;
+  
+  gl.bindBuffer(ds.buffers[name].target, ds.buffers[name].buffer);
+  gl.bufferData(ds.buffers[name].target, ds.metrics[name], gl.STATIC_DRAW);
+  
+  gl.bindBuffer(ds.buffers[name].target, null);
   
   console.timeEnd("parsing file (as shorts) " + name);
   
@@ -436,6 +446,10 @@ var getCurrentBuffers = function() {
   curBufs['metric'] = ds.buffers[ds.curMetric];
   curBufs['atten'] = ds.buffers[ds.curAttenuation];
   
+  if ($("#dogating").prop('checked')) {
+    curBufs['varCounts'] = ds.buffers['varCounts'];
+  }
+  
   return curBufs;
 };
 
@@ -632,7 +646,19 @@ var updateIndicator = function(setupOnly) {
 
 gl.ondraw = function() {
   var ptShader = $("#dodiagonal").prop('checked') ? shaders['pointsDiag'] : shaders['points'];
-  var cbPtShader = $("#dodiagonal").prop('checked') ? shaders['cb_pointsDiag'] : shaders['cb_points'];
+  
+  /*var cbPtShader = $("#dodiagonal").prop('checked') ? 
+    ($("#dogating").prop('checked') ? shaders['cb_PointsDiagGated'] : shaders['cb_pointsDiag']) 
+      : shaders['cb_points'];*/
+      
+  var cbPtShader = shaders['cb_points'];
+  if ($("#dodiagonal").prop('checked')) {
+    if ($("#dogating").prop('checked')) {
+      cbPtShader = shaders['cb_pointsDiagGated'];
+    } else {
+      cbPtShader = shaders['cb_pointsDiag'];
+    }
+  }
 
   if (!ds.buffers['pos'] || !ds.ready[ds.curMetric] || !ds.ready[ds.curAttenuation] ||
       !ptShader || !cbPtShader || 
@@ -679,6 +705,7 @@ gl.ondraw = function() {
       minVal: ds.bounds[ds.curMetric][0][0], 
       maxVal: ds.bounds[ds.curMetric][0][1],
       maxAtten: ds.bounds[ds.curAttenuation][0][1],
+      gateLimit: $("#gateLevel").val() / 100,
       bivariate: bivar,
       darkening: darken,
       confidence: confid,
@@ -1223,6 +1250,8 @@ var mwheel = function(e, delta, deltaX, deltaY) {
   var oldScale = scale;  
   scale = deltaY > 0 ? scale * 2 : scale / 2;
   
+  // update the x-position so that the current position under the mouse 
+  // stays in roughly the same place
   var actualPos = (Math.abs(screenOffset[0]) + x / oldScale);
   var newStart = actualPos - (x / scale);
   screenOffset[0] = -1 * Math.floor(newStart);
@@ -1287,6 +1316,7 @@ var makeBinaryFileRequest = function(filename, name, doShort) {
     if (xhr.status == 200) {
       if (doShort === true) {
         loadBinaryShortSparseData(xhr.response, name);
+        $("#dogating").prop('disabled', false);
       } else {
         loadBinaryData(xhr.response, name);
       }
@@ -1312,6 +1342,7 @@ function setup() {
   loadShaderFromFiles("cb_points", "cb_points.vs", "points.fs");
   loadShaderFromFiles("pointsDiag", "pointsMatrix.vs", "points.fs");
   loadShaderFromFiles("cb_pointsDiag", "cb_pointsMatrix.vs", "points.fs");
+  loadShaderFromFiles("cb_pointsDiagGated", "cb_pointsMatrixGated.vs", "points.fs");
   
   loadShaderFromFiles("overview");
   loadShaderFromFiles("fillOverview", "fillOverview.vs", "points.fs");
@@ -1339,11 +1370,25 @@ function setup() {
   // Add mousewheel listener to the canvas
   $("#webglcanvas").mousewheel(mwheel);
   
+  $("#gateLevel").slider({
+    formatter: function(value) {
+      return 'Showing >' + value + '% variants';
+    }
+  });
+  
+  $("#gateLevel").on('slide', function(e) {
+    $("#gateVal").text(e.value);
+    
+    if ($("#dogating").prop('checked'))
+      gl.ondraw();
+  });
+  
   $("#dodarkening").change(function() {
     updateLegend();
     gl.ondraw();
   });
   
+  $("#dogating").change(gl.ondraw);
   $("#dodiagonal").change(gl.ondraw);
   $("#doconfidence").change(gl.ondraw);
   $("#dolightbinning").change(gl.ondraw);

@@ -26,6 +26,16 @@
         "conjProbDiff-ratio.dat"
       ],
       "variantCounts": "variantCounts.dat"
+	},
+	"H5N1_VHA4_SHA": {
+      "attenuation": "readBreadth.dat",
+      "metrics": [
+        "conjProbDiff.dat",
+		"conjProbDiff-gated10.dat",
+		"conjProbDiff-outliers.dat",
+        "conjProbDiff-ratio.dat"
+      ],
+      "variantCounts": "variantCounts.dat"
 	}
   }
 }

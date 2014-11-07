@@ -149,7 +149,7 @@ svg .axis text {
 
 #chooser {
 	border: 1px solid #000;
-	height: 150px;
+	height: 200px;
 	width: 300px;
 	position: absolute;
 	left: 850px;
@@ -196,3 +196,13 @@ svg .axis text {
 	top: 787px;
 	left: 810px;
 }
+
+.slider.slider-horizontal {
+	width: 100px;
+	margin: 0 10px;
+}
+
+#gateLevel .slider-selection {
+	background: #bababa;
+}
+
