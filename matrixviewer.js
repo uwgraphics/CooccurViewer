@@ -9,9 +9,6 @@ var isoluminantRdBuFixedWhite = ["#EC7B8B", "#FF696B", "#F07C68", "#D38D6D", "#B
 
 var timer = null;
 
-var extraTimer = "hello!";  // timer for extra data
-var extraRequested = false; // have we requested the extra files?
-
 var shaders = [];
 var textures = [];
 var overview, indicator, indicatorBackground;
@@ -51,7 +48,16 @@ var superZoomPos = [0, 0];
 
 // general function to read in binary data
 // assumes three header ints:
-// <window_size> <num_pos> <num-values-per-datapoint>
+// <window_size> <num_pos> <header_flags>
+// ... where <header_flags> is a 32-bit int:
+//
+//                     spacing (# data/element)
+// precision (n/a for floats) __  |
+//       is int? (n is float)__|  |
+//                            ||  |
+// is a sparse representation_||  |
+//                           |||  |
+// uuuuuuuuuuuuuuuuuuuuuuuuuusippnn
 var loadBinaryData = function(data, name) {
   ds.ready[name] = false;
   
@@ -61,7 +67,28 @@ var loadBinaryData = function(data, name) {
   
   var thisNumWindow = dv.getInt32(0);
   var thisNumPos = dv.getInt32(4);
-  var thisSpacing = dv.getInt32(8);
+  
+  // parse the header flags
+  var headerFlagInt = dv.getInt32(8);
+  // headerFlagInt >>= 8; // for some reason, java puts this stuff in the first two bytes?
+  var thisSpacing = (headerFlagInt & 3) + 1;
+  var precision = ((headerFlagInt & 12) >> 2) + 1;
+  var isInt = (headerFlagInt & 16) > 0;
+  var isSparse = (headerFlagInt & 32) > 0;
+  
+  // do some function definition here based on the header flags
+  var headerSize = 12;
+  var getDataVal = function(offset) { return DataView.prototype.getFloat32.call(dv, offset); };
+  if (isInt) {
+    getDataVal = function(offset) { return DataView.prototype.getInt32.call(dv, offset); };
+    if (precision == 2) {
+      getDataVal = function(offset) { return DataView.prototype.getInt16.call(dv, offset); };
+    } else if (precision == 1) {
+      getDataVal = function(offset) { return DataView.prototype.getInt8.call(dv, offset); };
+    }
+  } else {  
+    precision = 4;
+  }
   
   // do a bunch of error checking (also serves as documentation)
   if (ds.numPos && ds.numPos != thisNumPos) {
@@ -72,13 +99,23 @@ var loadBinaryData = function(data, name) {
     console.warn("number of items in a window does not match data in %s: expected %d, depth had a window size of %d", name, ds.numWindow, thisNumWindow);
   }
   
-  var expectedBytes = (thisNumWindow * thisNumPos * thisSpacing) * 4 + 12;
-  if (dv.byteLength !== expectedBytes) {
-    console.warn("expected to find %d bytes of data from header, found %d instead. unusual truncation may occur", dv.byteLength, expectedBytes);
-    
-    if (dv.byteLength < expectedBytes) {
-      console.error("missing data designated by header, please check the file. aborting.");
-      return false;
+  var expectedPositions = 0;
+  if (isSparse) {
+    expectedPositions = (dv.byteLength - headerSize) / (thisSpacing * precision + 4);
+    if (expectedPositions % 1 != 0) {
+      console.warn("expected to find %d positions of data, found a fraction of %f extra data (each element has %d data values associated of %d bytes of precision each)", expectedPositions, expectedPositions % 1, thisSpacing, precision);
+      
+      expectedPositions = Math.floor(expectedPositions);
+    }
+  } else {
+    var expectedBytes = (thisNumWindow * thisNumPos * thisSpacing) * precision + headerSize;
+    if (dv.byteLength !== expectedBytes) {
+      console.warn("expected to find %d bytes of data from header, found %d instead. unusual truncation may occur", dv.byteLength, expectedBytes);
+      
+      if (dv.byteLength < expectedBytes) {
+        console.error("missing data designated by header, please check the file. aborting.");
+        return false;
+      }
     }
   }
   
@@ -113,6 +150,8 @@ var loadBinaryData = function(data, name) {
     numPositions = Math.min(ds.numPos, thisNumPos);
   }
 
+  // always use a Float32Array; Javascript stores things as floats anyway, and
+  // WebGL doesn't like integer arrays in shaders when they're not indices (?!)
   ds.metrics[name] = new Float32Array(ds.numPos * ds.numWindow * thisSpacing);
   ds.bounds[name] = [];
   for (var n = 0; n < thisSpacing; n++) {
@@ -120,18 +159,39 @@ var loadBinaryData = function(data, name) {
     ds.bounds[name][n][0] = 10000;
     ds.bounds[name][n][1] = -10000;
   }
-
-  for (var i = 0, offset = 12; i < numPositions; i++) {
-    for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
-      var curIndex = (i * ds.numWindow + j) * thisSpacing;
-      for(var n = 0; n < thisSpacing; n++) {
-        var curVal = dv.getFloat32(offset);
+  
+  // explode out the sparse representation to a full representation for the GPU
+  var offset = headerSize;
+  if (isSparse) {
+    for (var i = 0; i < expectedPositions; i++) {
+      var curIndex = dv.getInt32(offset);
+      offset += 4;
+      
+      curIndex *= thisSpacing;
+      
+      for (var n = 0; n < thisSpacing; n++) {
+        var curVal = getDataVal(offset);
         ds.metrics[name][curIndex + n] = curVal;
         
         ds.bounds[name][n][0] = Math.min(ds.bounds[name][n][0], curVal);
-        ds.bounds[name][n][1] = Math.max(ds.bounds[name][n][1], curVal); 
+        ds.bounds[name][n][1] = Math.max(ds.bounds[name][n][1], curVal);
         
-        offset += 4;
+        offset += precision;
+      }
+    }
+  } else { // assume a list of elements and read them off sequentially
+    for (var i = 0; i < numPositions; i++) {
+      for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
+        var curIndex = (i * ds.numWindow + j) * thisSpacing;
+        for(var n = 0; n < thisSpacing; n++) {
+          var curVal = getDataVal(offset);
+          ds.metrics[name][curIndex + n] = curVal;
+          
+          ds.bounds[name][n][0] = Math.min(ds.bounds[name][n][0], curVal);
+          ds.bounds[name][n][1] = Math.max(ds.bounds[name][n][1], curVal); 
+          
+          offset += precision;
+        }
       }
     }
   }
@@ -157,119 +217,6 @@ var loadBinaryData = function(data, name) {
   
   gl.ondraw();
   return true;
-};
-
-var loadBinaryShortSparseData = function(data, name) {
-  ds.ready[name] = false;
-  
-  console.time("parsing file (as shorts) " + name);
-  
-  var dv = new DataView(data);
-  
-  var headerSize = 12;
-  var thisNumWindow = dv.getInt32(0);
-  var thisNumPos = dv.getInt32(4);
-  var thisSpacing = dv.getInt32(8);
-  
-  // total size - header / (associatedIndex (int32, 4b) + data_vals_per_element (int16, 2b))
-  var expectedPositions = (dv.byteLength - headerSize) / (thisSpacing * 2 + 4);
-  if (expectedPositions % 1 != 0) {
-    console.warn("expected to find %d positions of data, found a fraction of %f extra data (each element has %d data values associated", expectedPositions, expectedPositions % 1, thisSpacing);
-    
-    expectedPositions = Math.floor(expectedPositions);
-  }
-  
-  if (ds.numWindow == 0 || ds.numPos == 0) {
-    console.error("not expecting to call this method before other data is loaded (loadBinaryData)");
-    return;
-  }
-  
-  console.log("loading %s into an flattened array of size [%d][%d][%d] (pos, window, spacing)", name, thisNumPos, thisNumWindow, thisSpacing);
-  
-  ds.bounds[name] = [];
-  for (var n = 0; n < thisSpacing; n++) {
-    ds.bounds[name][n] = [];
-    ds.bounds[name][n][0] = 10000;
-    ds.bounds[name][n][1] = -10000;
-  }
-  
-  var offset = headerSize;
-  ds.metrics[name] = new Int16Array(thisNumWindow * thisNumPos * thisSpacing);
-  
-  for (var i = 0; i < expectedPositions; i++) {
-    var curIndex = dv.getInt32(offset);
-    offset += 4;
-    
-    curIndex *= thisSpacing;
-    
-    for (var n = 0; n < thisSpacing; n++) {
-      var curVal = dv.getInt16(offset);
-      ds.metrics[name][curIndex + n] = curVal;
-      
-      ds.bounds[name][n][0] = Math.min(ds.bounds[name][n][0], curVal);
-      ds.bounds[name][n][1] = Math.max(ds.bounds[name][n][1], curVal);
-      
-      offset += 2;
-    }
-  }
-  
-  /*
-  for (var i = 0, offset = 12; i < numPositions; i++) {
-    for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
-      var curIndex = dv.getInt32(offset);
-      offset += 4;
-      
-      // offset the index by # values per element
-      curIndex *= thisSpacing;
-      
-      for (var n = 0; n < thisSpacing; n++) {
-        var curVal = dv.getInt16(offset);
-        ds.metrics[name][curIndex + n] = curVal;
-        
-        ds.bounds[name][n][0] = Math.min(ds.bounds[name][n][0], curVal);
-        ds.bounds[name][n][1] = Math.max(ds.bounds[name][n][1], curVal);
-        
-        offset += 2;
-      }
-    }
-  }
-  */
-  
-  // bind a buffer? probably not yet
-  // JUST KIDDING, DO IT NOW
-  ds.buffers[name] = new GL.Buffer(gl.ARRAY_BUFFER, Int16Array);
-  ds.buffers[name].buffer = gl.createBuffer();
-  ds.buffers[name].buffer.length = ds.numPos * ds.numWindow * thisSpacing;
-  ds.buffers[name].buffer.spacing = thisSpacing;
-  
-  gl.bindBuffer(ds.buffers[name].target, ds.buffers[name].buffer);
-  gl.bufferData(ds.buffers[name].target, ds.metrics[name], gl.STATIC_DRAW);
-  
-  gl.bindBuffer(ds.buffers[name].target, null);
-  
-  console.timeEnd("parsing file (as shorts) " + name);
-  
-  ds.ready[name] = true;
-  return true;
-};
-
-// function to load data that isn't critical for the operation of the visualization
-var loadExtraData = function() {
-  // short-circuit if we've already requested the file
-  if (extraRequested) return;
-
-  if (extraTimer && (!ds.ready[ds.curMetric] || !ds.ready[ds.curAttenuation])) {
-    extraTimer = setTimeout(loadExtraData, 500);
-  }
-  
-  extraRequested = true;
-  extraTimer = null;
-  
-  ds.curCounts = ["varCounts", "baseCounts"];
-  
-  // request the count files
-  makeBinaryFileRequest("variantCounts.dat", "varCounts", true);
-  makeBinaryFileRequest("baseCounts.dat", "baseCounts", true);
 };
 
 // get the current metric's values for the given coordinate
@@ -1408,6 +1355,7 @@ function setup() {
     
     // check if this data has been loaded already
     if (!ds.ready[filename]) {
+      updateLoadingStatus("loading metric " + filename + " ...");
       makeBinaryFileRequest(dataDir + filename, filename);
     }
     
@@ -1436,8 +1384,11 @@ var loadDataset = function(datasetName, datasetObj) {
   ds.numPos = 0;
   ds.numWindow = 0;
   texturesCreated = false;
-  if (ds.curMetric) ds.ready[ds.curMetric] = false;
-  if (ds.curAttenuation) ds.ready[ds.curAttenuation] = false;
+  
+  // mark all metrics as 'not ready' to force reload them
+  for (metric in ds.ready) {
+    ds.ready[metric] = false;
+  }
   
   dataDir = "data/" + datasetName + "/";
   
@@ -1446,7 +1397,7 @@ var loadDataset = function(datasetName, datasetObj) {
   makeBinaryFileRequest(dataDir + datasetObj['metrics'][0], datasetObj['metrics'][0]);
   
   // make the request for the variantCount data (as shorts instead of floats)
-  makeBinaryFileRequest(dataDir + datasetObj['variantCounts'], "varCounts", true); 
+  makeBinaryFileRequest(dataDir + datasetObj['variantCounts'], "varCounts"); 
   // loadExtraData();
   
   // load the metrics into the dropdown

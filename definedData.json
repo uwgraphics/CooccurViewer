@@ -1,41 +1,55 @@
 {
-	"datasets": {
+    "datasets": {
     "SHFVkrc1_RC06": {
       "attenuation": "readBreadth.dat",
       "metrics": [
         "conjProbDiff.dat",
-        "conjProbDiff-old.dat",
-        "conjProbDiff-ratio.dat"
+        "conjProbDiff-ratio.dat",
+        "conjProbDiff-gated05.dat",
+        "conjProbDiff-outliers.dat"
       ],
-      "variantCounts": "variantCounts.dat"
+      "variantCounts": "variantCounts.dat",
+      "numPos": 16000,
+      "numReads": 122890,
+      "origData": "SHFVkrc1_RC06 mapping.sam"
     }, 
     "SHIV_nef": {
       "attenuation": "readBreadth.dat",
       "metrics": [
         "conjProbDiff.dat",
-		"conjProbDiff-gated10.dat",
-        "conjProbDiff-ratio.dat"
+        "conjProbDiff-ratio.dat",
+        "conjProbDiff-gated05.dat",
+        "conjProbDiff-outliers.dat"
       ],
-      "variantCounts": "variantCounts.dat"
+      "variantCounts": "variantCounts.dat",
+      "numPos": 12000,
+      "numReads": 973000,
+      "origData": "SHIV_nef.sam"
     },
-	"sampledata": {
+    "sampledata": {
       "attenuation": "readBreadth.dat",
       "metrics": [
         "conjProbDiff.dat",
-		"conjProbDiff-outliers.dat",
-        "conjProbDiff-ratio.dat"
+        "conjProbDiff-ratio.dat",
+        "conjProbDiff-gated05.dat",
+        "conjProbDiff-outliers.dat"
       ],
-      "variantCounts": "variantCounts.dat"
-	},
-	"H5N1_VHA4_SHA": {
+      "variantCounts": "variantCounts.dat",
+      "numPos": 20,
+      "numReads": 15,
+      "origData": "sampledata.sam"
+    },
+    "H5N1_VHA4_SHA": {
       "attenuation": "readBreadth.dat",
       "metrics": [
-        "conjProbDiff.dat",
-		"conjProbDiff-gated10.dat",
-		"conjProbDiff-outliers.dat",
-        "conjProbDiff-ratio.dat"
+        "conjProbDiff-ratio.dat",
+        "conjProbDiff-gated05.dat",
+        "conjProbDiff-outliers.dat"
       ],
-      "variantCounts": "variantCounts.dat"
-	}
+      "variantCounts": "variantCounts.dat",
+      "numPos": 2500,
+      "numReads": 258000,
+      "origData": "VHA4_SHA_P11_F21_DPI3_R1_I18_C21.sam"
+    }
   }
 }
