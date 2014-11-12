@@ -1276,28 +1276,20 @@ var makeBinaryFileRequest = function(filename, name, doShort) {
   xhr.send(null);
 };
 
+// handles all the DOM setup (adding the canvas to the page).  
+// all webgl state is handled by the next function (to help with WebGLContextLost)
 function setup() {
   gl.canvas.id = "webglcanvas";
   var canvasContainer = document.getElementById("canvas-container");
   canvasContainer.insertBefore(gl.canvas, canvasContainer.children[0]);
   
-  // set up the viewport
-  resizeCanvas();
+  // set up WebGL state
+  initWebGLResources();
   
-  // load the shaders
-  loadShaderFromFiles("points");
-  loadShaderFromFiles("cb_points", "cb_points.vs", "points.fs");
-  loadShaderFromFiles("pointsDiag", "pointsMatrix.vs", "points.fs");
-  loadShaderFromFiles("cb_pointsDiag", "cb_pointsMatrix.vs", "points.fs");
-  loadShaderFromFiles("cb_pointsDiagGated", "cb_pointsMatrixGated.vs", "points.fs");
-  
-  loadShaderFromFiles("overview");
-  loadShaderFromFiles("fillOverview", "fillOverview.vs", "points.fs");
-  
-  loadShaderFromFiles("solid");
-  
-  // debugging
-  loadShaderFromFiles("texture", "texture.vs", "overview.fs");
+  // add an event listener that tries to reinitialize WebGL
+  // test with canvas.loseContext();
+  gl.canvas.addEventListener("webglcontextlost", function(ev) { ev.preventDefault(); }, false);
+  gl.canvas.addEventListener("webglcontextrestored", initWebGLResources, false);
   
   var changeColormap = function() {
     if (!useBivariate) {
@@ -1367,6 +1359,35 @@ function setup() {
   
   useBivariate = true;
   changeColormap();
+}
+  
+function initWebGLResources() {
+  // if we're recovering from a lost context, invalidate any generated WebGL textures 
+  // and buffers and force them to repopulate
+  texturesCreated = false;
+  
+  // mark all metrics as 'not ready' to force reload them
+  for (metric in ds.ready) {
+    ds.ready[metric] = false;
+  }
+
+  // set up the viewport
+  resizeCanvas();
+  
+  // load the shaders
+  loadShaderFromFiles("points");
+  loadShaderFromFiles("cb_points", "cb_points.vs", "points.fs");
+  loadShaderFromFiles("pointsDiag", "pointsMatrix.vs", "points.fs");
+  loadShaderFromFiles("cb_pointsDiag", "cb_pointsMatrix.vs", "points.fs");
+  loadShaderFromFiles("cb_pointsDiagGated", "cb_pointsMatrixGated.vs", "points.fs");
+  
+  loadShaderFromFiles("overview");
+  loadShaderFromFiles("fillOverview", "fillOverview.vs", "points.fs");
+  
+  loadShaderFromFiles("solid");
+  
+  // debugging
+  loadShaderFromFiles("texture", "texture.vs", "overview.fs");
   
   // gl.ondraw(); 
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
