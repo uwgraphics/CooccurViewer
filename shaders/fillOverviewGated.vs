@@ -1,10 +1,5 @@
-attribute vec2 pos;
-attribute float metric;
-attribute float atten;
-attribute vec4 varCounts;
+uniform vec2 dataSize;
 
-uniform float pointSize;
-uniform float windowSize;
 uniform float minVal;
 uniform float maxVal;
 uniform float maxAtten;
@@ -13,12 +8,15 @@ uniform float gateLimit;
 
 uniform int bivariate;
 uniform int darkening;
-uniform int confidence;
-uniform int binLight;
 
 uniform float rampTexWidth;
 uniform float numSteps;
 uniform sampler2D colorRamp;
+
+attribute vec2 pos;
+attribute float metric;
+attribute float atten;
+attribute vec4 varCounts;
 
 varying vec4 vColor;
 
@@ -128,9 +126,9 @@ vec3 LABtoRGB(vec3 lab, bool clamp){
 vec4 getColorFromColorRamp() {
 	// figure out where in the ramp we are 
 	float cbIndex = 0.0;
-	if (metric <= minVal) {
+	if (metric <= minVal && bivariate == 0) {
 		cbIndex = 0.0;
-	} else if (metric >= maxVal) {
+	} else if (metric >= maxVal && bivariate == 0) {
 		cbIndex = numSteps - 1.0;
 	} else if (metric == 0.0 && bivariate == 1) {
 		cbIndex = floor(numSteps / 2.0);
@@ -138,7 +136,6 @@ vec4 getColorFromColorRamp() {
 		cbIndex = floor(((metric - minVal) / (maxVal - minVal)) * (numSteps - 2.0)) + 1.0;
 	}
 	
-		
 	// calculate the % of variants in i to see whether it meets 
 	// the inclusion threshold
 	float gateFactor = (varCounts[1] + varCounts[3]) / (varCounts[0] + varCounts[1] + varCounts[2] + varCounts[3]);
@@ -159,19 +156,8 @@ vec4 getColorFromColorRamp() {
 		return texture2D(colorRamp, vec2(xCoord, yCoord) + vec2(0.03));
 	} else {	
 		// try changing the luminance only
-		vec3 labColor = LABtoLCH(RGBtoLAB(texture2D(colorRamp, vec2(xCoord, yCoord) + vec2(0.03)).rgb));
-		
-		// bin the darkening factor; split into 6 slots:
-		// [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]
 		float dimFactor = atten / maxAtten;
-		
-		if (binLight == 1) {
-			dimFactor = 0.1 * floor(dimFactor * 11.0);
-		}
-		
-		if (confidence == 0) {
-			dimFactor = 1.0;
-		}
+		vec3 labColor = LABtoLCH(RGBtoLAB(texture2D(colorRamp, vec2(xCoord, yCoord) + vec2(0.03)).rgb));
 		
 		// darkening (works)
 		if (darkening == 1) {
@@ -180,13 +166,24 @@ vec4 getColorFromColorRamp() {
 			labColor = mix(labColor, vec3(100.0, 0.0, 0.0), 1.0 - dimFactor);
 		}
 		
+		if (false) {
+			labColor.y = labColor.y * pow(1.0, dimFactor);
+		}
+		
 		return vec4(LABtoRGB(LCHtoLAB(labColor), true), 1.0);	
 	}
 }
 
 void main() {
-	gl_Position = gl_ModelViewProjectionMatrix * vec4(pos.x + pos.y - (windowSize / 2.0) + 1.0, pos.x, -5.0, 1.0);
-	gl_PointSize = pointSize;
+	// compute the z-position based on the absolute value of the position
+	// [minVal, maxVal] -> [1, 0];
+	float zpos = abs(metric) / max(abs(minVal), abs(maxVal));
+	zpos = (zpos - 1.0) * -1.0;
+	
+	
+	// translate the x,y position of the point to x,y position in the output texture
+	gl_Position = vec4(pos / dataSize * vec2(2.0) - vec2(1.0), zpos, 1.0);
+	gl_PointSize = 1.0;
 	
 	vColor = getColorFromColorRamp();
 }

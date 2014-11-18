@@ -42,6 +42,7 @@
     "H5N1_VHA4_SHA": {
       "attenuation": "readBreadth.dat",
       "metrics": [
+        "conjProbDiff.dat",
         "conjProbDiff-ratio.dat",
         "conjProbDiff-gated05.dat",
         "conjProbDiff-outliers.dat"
@@ -50,6 +51,15 @@
       "numPos": 2500,
       "numReads": 258000,
       "origData": "VHA4_SHA_P11_F21_DPI3_R1_I18_C21.sam"
-    }
+    },
+	"VHA4_P11_F21_DPI3-ref": {
+      "attenuation": "readBreadth.dat",
+      "metrics": ["conjProbDiff.dat"],
+	  "variantCounts": "variantCounts.dat",
+      "numPos": 2500,
+      "numReads": 258000,
+      "origData": "VHA4_SHA_P11_F21_DPI3_R1_I18_C21.sam",
+	  "reference": "VN1203-HA.fa.txt"	  
+	}
   }
 }

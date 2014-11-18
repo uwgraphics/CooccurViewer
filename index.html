@@ -75,23 +75,29 @@
             <svg id="detail" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"></svg>
             <svg id="legend" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"></svg>
             <div id="chooser">
-                <label for="datafile">Dataset File: </label>
-                <select id="datafile" class="form-control" style="width: auto; display:inline-block;">
-                    <option selected>readBreadth.dat</option>
-                    <option>alternative</option>
-                </select><br />
+                <div class="form-group">
+                    <label for="datafile">Dataset File: </label>
+                    <select id="datafile" class="form-control" style="width: auto; display:inline-block;">
+                        <option selected>readBreadth.dat</option>
+                        <option>alternative</option>
+                    </select>
+                </div>
                 
-                <label for="metrics">Metrics:</label>
-                <select id="metrics" class="form-control" style="width: auto; display:inline-block;">
-                    <option selected>conjProbDiff.dat</option>
-                    <option>conjProbDiff-old.dat</option>
-                    <option>conjProbDiff-ratio.dat</option>
-                </select><br />
+                <div class="form-group">
+                    <label for="metrics">Metrics:</label>
+                    <select id="metrics" class="form-control" style="width: auto; display:inline-block;">
+                        <option selected>conjProbDiff.dat</option>
+                        <option>conjProbDiff-old.dat</option>
+                        <option>conjProbDiff-ratio.dat</option>
+                    </select>
+                </div>
                 
-                <label for="gateLevel">Gating:</label>
-                <input type="checkbox" id="dogating" disabled />
-                <input id="gateLevel" type="text" data-slider-min="0" data-slider-max="50" data-slider-step="1" data-slider-value="10" />
-                <span id="gateVal">10</span>
+                <div class="form-group">
+                    <label for="gateLevel">Gating:</label>
+                    <input type="checkbox" id="dogating" />
+                    <input id="gateLevel" type="text" data-slider-min="0" data-slider-max="50" data-slider-step="1" data-slider-value="10" data-slider-enabled="false" />
+                    <span id="gateVal">10</span>
+                </div>
                 
                 <img src="img/conjProbDiff.dat.png" id="metriceq" />
                 

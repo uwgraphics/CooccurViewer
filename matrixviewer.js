@@ -393,7 +393,7 @@ var getCurrentBuffers = function() {
   curBufs['metric'] = ds.buffers[ds.curMetric];
   curBufs['atten'] = ds.buffers[ds.curAttenuation];
   
-  if ($("#dogating").prop('checked')) {
+  if ($("#dogating").prop('checked') && ds.ready['varCounts']) {
     curBufs['varCounts'] = ds.buffers['varCounts'];
   }
   
@@ -422,6 +422,11 @@ var constructOverviewTexture = function() {
     textures[curTexture] = new GL.Texture(gl.canvas.width, texHeight);
   }
   
+  // default to non-gated
+  var shader = shaders['fillOverview'];
+  if ($("#dogating").prop('checked') && ds.ready['varCounts'])
+    shader = shaders['fillOverviewGated'];
+  
   var curBufs = getCurrentBuffers();
   textures[curTexture].drawTo(function() {
     var bivar = useBivariate ? 1 : 0;
@@ -435,13 +440,14 @@ var constructOverviewTexture = function() {
     
     colormapTexture.bind(0);
     
-    shaders['fillOverview'].uniforms({
+    shader.uniforms({
       dataSize: [effNumPos, ds.numWindow],
       minVal: ds.bounds[ds.curMetric][0][0],
       maxVal: ds.bounds[ds.curMetric][0][1],
       maxAtten: ds.bounds[ds.curAttenuation][0][1],
       bivariate: bivar,
       darkening: darken,
+      gateLimit: $("#gateLevel").val() / 100,
       rampTexWidth: colormapWidth,
       numSteps: chosenColormap.length,
       colorRamp: 0
@@ -609,7 +615,8 @@ gl.ondraw = function() {
 
   if (!ds.buffers['pos'] || !ds.ready[ds.curMetric] || !ds.ready[ds.curAttenuation] ||
       !ptShader || !cbPtShader || 
-      !shaders['overview'] || !shaders['solid'] || !shaders['fillOverview']) 
+      !shaders['overview'] || !shaders['solid'] || 
+      !shaders['fillOverview'] || !shaders['fillOverviewGated']) 
   {
     timer = setTimeout("gl.ondraw()", 300);
     return;
@@ -746,8 +753,9 @@ var updateAxisLabels = function() {
   var xmin = Math.floor(-screenOffset[0]);
   var xmax = Math.floor(-screenOffset[0] + gl.canvas.width / scale);
   
-  $("#label-xmin").html(spacify(xmin));
-  $("#label-xmax").html(spacify(xmax));
+  // data up to this point is 0-indexed; use 1-index for display
+  $("#label-xmin").html(spacify(xmin + 1));
+  $("#label-xmax").html(spacify(xmax + 1));
   if ($("#dodiagonal").prop('checked')) {
     var ymin = xmin;
     var ymax = Math.floor(ymin + (gl.canvas.height - topMargin) / scale);
@@ -817,7 +825,9 @@ var updateSuperZoom = function() {
     } else {
       var c = getColorFromDataValue(curVal);
       curPixel.style.backgroundColor = "rgb("+c[0]+","+c[1]+","+c[2]+")";
-      curPixel.children[1].innerHTML = "("+x+", "+y+")";
+      
+      // data is all 0-indexed up to this point; convert to 1-index for display
+      curPixel.children[1].innerHTML = "("+(x+1)+", "+(y+1)+")";
       curPixel.children[0].innerHTML = curVal.toFixed(3);
     }
   }
@@ -978,6 +988,8 @@ var updateDetail = function() {
     ret[1]['ovar_var'] = data.vari_varj;
     ret[1]['omodal_var'] = data.modali_varj;
     
+    console.log("this position i = %d has %f % variant", data.i, Math.round(ret[0]['var'] / (ret[0]['var'] + ret[0]['modal']) * 10000) / 100);
+    
     return ret;
   };
   
@@ -1125,7 +1137,8 @@ var updateDetail = function() {
     .attr('y', (barHeight - 15) / 2)
     .attr('transform', "rotate(270, -5, " + ((barHeight - 15)/2) + ")")
     .style('text-anchor', 'middle')
-    .text(function(d) { return d.pos; });
+    .text(function(d) { return (d.pos + 1); }); // data is 0-indexed to this point,
+                                                // changed to 1-index for display
 };
   
 
@@ -1315,7 +1328,7 @@ function setup() {
     }
   });
   
-  $("#gateLevel").on('slide', function(e) {
+  $("#gateLevel").on('slideStop', function(e) {
     $("#gateVal").text(e.value);
     
     if ($("#dogating").prop('checked'))
@@ -1327,7 +1340,16 @@ function setup() {
     gl.ondraw();
   });
   
-  $("#dogating").change(gl.ondraw);
+  $("#dogating").change(function() {
+    if (this.checked)
+      $("#gateLevel").slider("enable");
+    else
+      $("#gateLevel").slider("disable");
+      
+    gl.ondraw();
+  });
+  
+  
   $("#dodiagonal").change(gl.ondraw);
   $("#doconfidence").change(gl.ondraw);
   $("#dolightbinning").change(gl.ondraw);
@@ -1383,6 +1405,7 @@ function initWebGLResources() {
   
   loadShaderFromFiles("overview");
   loadShaderFromFiles("fillOverview", "fillOverview.vs", "points.fs");
+  loadShaderFromFiles("fillOverviewGated", "fillOverviewGated.vs", "points.fs");
   
   loadShaderFromFiles("solid");
   
