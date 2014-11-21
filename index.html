@@ -185,13 +185,23 @@
                 
                 <h4>Interacting with the Data</h4>
                 <p>
-                    The data is displayed diagonally by default, with the <i>i</i>th position on the y-axis, and the <i>j</i>th position on the x-axis.  Hovering the mouse over a particular position brings up the encoded data in the 'super-zoom' at top-right, which shows the current coordinates and metric value(s).  Navigation through the dataset is possible by clicking on a new position in the overview at top.  Zooming into the data is possible by using the mousewheel.  Switching the metric will cause the visualization to ask for the data file (up to 15 seconds) and load it into the visualization (1 second).  Subsequent metric switches will be instantaneous.
+                    The data is displayed diagonally by default, with the <strong>i</strong>th position on the y-axis, and the <strong>j</strong>th position on the x-axis.  The following methods itemize the ways to interact with the visualization.
                 </p>
+                    
+                <ul id="interactionList">
+                    <li><em class="stronk">Clicking in the overview</em> will navigate the main view to the area highlighted by the green bar.  The mouse must stay within the top bar when panning the dataset.</li>
+                    <li><em class="stronk">Using the scroll wheel</em> within the canvas will change the zoom level of the current view.  The position of the cursor will focus the area of zoom, but the zoom position will always be fixed toward the diagonal of the matrix.</li>
+                    <li><em class="stronk">Hovering the mouse</em> over the dataset at a particular position brings up the encoded data in the 'super-zoom' at top-right, which shows the a view of the current coordinates and metric value(s) under the mouse.</li>
+                    <li><em class="stronk">Clicking the dataset</em> will freeze the 'super-zoom' (which will blink), allowing for more detailed examination of the data.  Further, <em class="stronk">clicking on a 'pixel' in the 'super-zoom'</em> will display the counts of non-variant and variant reads in the below view.</li>
+                    <li><em class="stronk">Clicking a count rectangle</em> in the counts view will condition the reads of the paired read.  This conditioned view can be reset by again clicking on the appropriate pixel in the 'super-zoom.'</li>
+                    <li><em class="stronk">Switching the <strong>metric</strong></em> will cause the visualization to ask for the data file (up to 15 seconds) and load it into the visualization (1 second).  The equation used to compute each metric is displayed below the drop-down.</li>
+                    <li><em class="stronk">Enabling <strong>gating</strong></em> will blank out any color if the <strong>i</strong>th position does not contain at least <strong>x%</strong> variants.  This helps to elimate noise in the visualization and promotes salience of highly-correlated variants.</li>
+                </ul>
                 <p>&nbsp;</p>
                 
                 <h4>Implementation Notes</h4>
                 <p>
-                    This implementation of Splatterplots has been tested in Google Chrome (v36) and Firefox (v32).  Client computers must support WebGL (GPU, drivers, browser, OS) and the <strong>OES_float_texture</strong> WebGL extension for correct rendering. Check WebGL support of your current configuration on <a href="http://renderingpipeline.com/webgl-extension-viewer/" target="_blank">RenderingPipeline</a>. Internet Explorer and Safari do not support WebGL due to security concerns.
+                    This implementation of Splatterplots has been tested in Google Chrome (v36) and Firefox (v32).  Client computers must support WebGL (GPU, drivers, browser, OS) and the <strong>OES_float_texture</strong> WebGL extension for correct rendering. Check WebGL support of your current configuration on <a href="http://webglreport.com/" target="_blank">WebGL Report</a>. Internet Explorer and Safari do not support WebGL due to security concerns.
                 </p>
             </div>
             <div class="modal-footer">

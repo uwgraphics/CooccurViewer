@@ -206,3 +206,11 @@ svg .axis text {
 	background: #bababa;
 }
 
+#interactionList > li {
+	margin-bottom: 1em;
+}
+
+.stronk {
+	color: #F07C68;
+}
+
