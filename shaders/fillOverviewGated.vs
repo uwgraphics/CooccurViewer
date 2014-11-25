@@ -138,9 +138,10 @@ vec4 getColorFromColorRamp() {
 	
 	// calculate the % of variants in i to see whether it meets 
 	// the inclusion threshold
-	float gateFactor = (varCounts[1] + varCounts[3]) / (varCounts[0] + varCounts[1] + varCounts[2] + varCounts[3]);
+	float jGateFactor = (varCounts[1] + varCounts[3]) / (varCounts[0] + varCounts[1] + varCounts[2] + varCounts[3]);
+	float iGateFactor = (varCounts[2] + varCounts[3]) / (varCounts[0] + varCounts[1] + varCounts[2] + varCounts[3]);
 	
-	if (gateLimit > gateFactor) {
+	if (gateLimit > jGateFactor || gateLimit > iGateFactor) {
 		if (bivariate == 1) {
 			cbIndex = floor(numSteps / 2.0);
 		} else {

@@ -39,6 +39,17 @@
       "numReads": 15,
       "origData": "sampledata.sam"
     },
+	"sampledata-new": {
+      "attenuation": "readBreadth.dat",
+      "metrics": [
+        "conjProbDiff.dat",
+        "conjProbDiff-ratio.dat"
+      ],
+      "variantCounts": "variantCounts.dat",
+      "numPos": 60,
+      "numReads": 25,
+      "origData": "sampledata.sam"
+    },
     "H5N1_VHA4_SHA": {
       "attenuation": "readBreadth.dat",
       "metrics": [

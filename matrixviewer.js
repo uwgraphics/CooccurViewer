@@ -287,15 +287,15 @@ var colorbrewerRampToTexture = function(colors, doReverse) {
   colormapWidth = w;
 };
 
-// given an absolute position x, y (e.g. the actual positions of x and y; y is NOT
+// given an absolute position x, y (e.g. the actual positions of i and j; j is NOT
 // an index into the window), return the n-th value from the current metric
-var getDataValueFromAbsolutePosition = function(x, y, n) {
+var getDataValueFromAbsolutePosition = function(i, j, n) {
   // default to the first value (if 1-D metric)
   n = n || 0;
   
   // have to convert from absolute y to a window index;
   // y = x corresponds to Math.floor(ds.numWindow / 2)
-  var wIndex = x - y + Math.floor(ds.numWindow / 2);
+  var wIndex = j - i + Math.floor(ds.numWindow / 2);
   
   // throw an error if the corresponding y value falls outside the loaded window
   if (wIndex < 0 || wIndex >= ds.numWindow) {
@@ -306,7 +306,7 @@ var getDataValueFromAbsolutePosition = function(x, y, n) {
   var curData = ds.metrics[ds.curMetric];
   var curSpacing = ds.buffers[ds.curMetric].buffer.spacing;
   
-  return curData[(y * ds.numWindow + wIndex) * curSpacing + n];
+  return curData[(i * ds.numWindow + wIndex) * curSpacing + n];
 };
 
 // given a x position (position number) and a y value (window value) and optionally
@@ -773,11 +773,11 @@ var handleSuperZoomClick = function() {
   var i = Array.prototype.indexOf.call(this.parentNode.children, this);
   
   // get the offset from the center pixel
-  var dx = (i % 3) - 1;
-  var dy = Math.floor(i / 3) - 1;
+  var di = (i % 3) - 1;
+  var dj = Math.floor(i / 3) - 1;
   
   // set the detail position and call the function to update the detail view
-  detailPos = [superZoomPos[0] + dx, superZoomPos[1] + dy];
+  detailPos = [superZoomPos[1] + di, superZoomPos[0] + dj];
   updateDetail();
 };
 
@@ -807,14 +807,14 @@ var updateSuperZoom = function() {
   superZoomPos = convertScreenToDataCoords();
   
   var sZContainer = document.getElementById("super-zoom");
-  for (var i = 0; i < 9; i++) {
-    var curPixel = sZContainer.children[i];
+  for (var n = 0; n < 9; n++) {
+    var curPixel = sZContainer.children[n];
     
-    var dx = (i % 3) - 1;
-    var dy = Math.floor(i / 3) - 1;
+    var dy = (n % 3) - 1;
+    var dx = Math.floor(n / 3) - 1;
     
-    var x = superZoomPos[0] + dx;
-    var y = superZoomPos[1] + dy;
+    var y = superZoomPos[0] + dx;
+    var x = superZoomPos[1] + dy;
     
     var curVal = getDataValueFromAbsolutePosition(x, y);
     
@@ -848,7 +848,7 @@ var convertScreenToDataCoords = function() {
     yval = -1;
   }
   
-  return [Math.floor(xval), Math.floor(yval)];
+  return [Math.floor(yval), Math.floor(xval)];
 };
 
 // do this outside (this is the D3 thing to do?!)

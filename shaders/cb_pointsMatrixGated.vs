@@ -141,9 +141,10 @@ vec4 getColorFromColorRamp() {
 		
 	// calculate the % of variants in i to see whether it meets 
 	// the inclusion threshold
-	float gateFactor = (varCounts[1] + varCounts[3]) / (varCounts[0] + varCounts[1] + varCounts[2] + varCounts[3]);
+	float jGateFactor = (varCounts[1] + varCounts[3]) / (varCounts[0] + varCounts[1] + varCounts[2] + varCounts[3]);
+	float iGateFactor = (varCounts[2] + varCounts[3]) / (varCounts[0] + varCounts[1] + varCounts[2] + varCounts[3]);
 	
-	if (gateLimit > gateFactor) {
+	if (gateLimit > jGateFactor || gateLimit > iGateFactor) {
 		if (bivariate == 1) {
 			cbIndex = floor(numSteps / 2.0);
 		} else {
@@ -185,7 +186,7 @@ vec4 getColorFromColorRamp() {
 }
 
 void main() {
-	gl_Position = gl_ModelViewProjectionMatrix * vec4(pos.x + pos.y - (windowSize / 2.0) + 1.0, pos.x, -5.0, 1.0);
+	gl_Position = gl_ModelViewProjectionMatrix * vec4(pos.x, pos.x + pos.y - (windowSize / 2.0) + 1.0, -5.0, 1.0);
 	gl_PointSize = pointSize;
 	
 	vColor = getColorFromColorRamp();

@@ -169,7 +169,7 @@ vec4 getColorFromColorRamp() {
 }
 
 void main() {
-	gl_Position = gl_ModelViewProjectionMatrix * vec4(pos.x + pos.y - (windowSize / 2.0) + 1.0, pos.x, -5.0, 1.0);
+	gl_Position = gl_ModelViewProjectionMatrix * vec4(pos.x, pos.x + pos.y - (windowSize / 2.0) + 1.0, -5.0, 1.0);
 	gl_PointSize = pointSize;
 	
 	vColor = getColorFromColorRamp();
