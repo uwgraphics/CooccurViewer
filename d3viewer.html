@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MatrixViewer - UW Graphics Group</title>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+    
+    <!-- boostrap -->
+    <link href="lib/bootstrap.min.css" rel="stylesheet" />
+    <link href="lib/bootstrap-slider.css" rel="stylesheet" />
+    
+    <!-- local stylesheet -->
+    <link rel="stylesheet" href="style.css" />
+    
+</head>
+<body>
+<nav class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar-collapse-1">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="#">
+                <img src="img/logo.png" class="img-responsive pull-left"> 
+                Co-Occurrence D3Viewer
+            </a>
+        </div>
+        <div class="collapse navbar-collapse" id="navbar-collapse-1">
+            <ul class="nav navbar-nav">
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#faq">How to use</a>
+                </li>
+                <li>
+                    <div class="btn-group navbar-btn" id="datasetChooser">
+                        <button type="button" class="btn btn-primary" id="currentDataset">SHFV</button>
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown">
+                            <span class="caret"></span>
+                            <span class="sr-only">Toggle Dropdown</span>
+                        </button>
+                        <ul class="dropdown-menu" role="menu" id="datasetOptions">
+                            <li><a href="#">SHFV</a></li>
+                            <li><a href="#">SHIV</a></li>
+                        </ul>
+                    </div>
+                </li>
+            </ul>
+            
+            <p class="navbar-text navbar-right"><small>
+                Test interface for finding interesting co-occurence locations
+            </small></p>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid">
+    <div class="row" style="height: 900px;">
+        <!-- canvas(es) will be added here -->
+        <div class="col-sm-12" id="canvas-container">
+            <div id="loading">
+                <span id="status">Loading components...</span>
+            </div>
+            <div id="canvas-labels">
+                <div id="label-xmin"></div>
+                <div id="label-xmax"></div>
+                <div id="label-ymin"></div>
+                <div id="label-ymax"></div>
+            </div>
+            <div id="super-zoom"></div>
+            <svg id="detail" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"></svg>
+            <svg id="legend" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"></svg>
+            <div id="chooser">
+                <div class="form-group">
+                    <label for="datafile">Dataset File: </label>
+                    <select id="datafile" class="form-control" style="width: auto; display:inline-block;">
+                        <option selected>readBreadth.dat</option>
+                        <option>alternative</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="metrics">Metrics:</label>
+                    <select id="metrics" class="form-control" style="width: auto; display:inline-block;">
+                        <option selected>conjProbDiff.dat</option>
+                        <option>conjProbDiff-old.dat</option>
+                        <option>conjProbDiff-ratio.dat</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="gateLevel">Gating:</label>
+                    <input type="checkbox" id="dogating" />
+                    <input id="gateLevel" type="text" data-slider-min="0" data-slider-max="50" data-slider-step="1" data-slider-value="10" data-slider-enabled="false" />
+                    <span id="gateVal">10</span>
+                </div>
+                
+                <img src="img/conjProbDiff.dat.png" id="metriceq" />
+                
+            </div>
+        </div>
+    </div>
+    
+    <div class="row"></div>
+    
+    <div class="row" style="margin-top: 30px;">
+        <div class="col-sm-12" id="img-container">
+        
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-sm-offset-4 col-sm-2">
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" id="dodiagonal" checked /> Show diagonally?         
+                </label>
+            </div>
+        </div>
+        <div class="col-sm-6">
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" id="usecolorbrewer" checked disabled/> Use Colorbrewer?
+                </label>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-sm-offset-1 col-sm-2">
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" id="dodarkening" class="bivariateOpts" /> Darken (confidence)
+                </label>
+            </div>
+        </div>
+        <div class="col-sm-2">
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" id="useisoluminant" class="bivariateOpts" /> Isoluminant ramp?
+                </label>
+            </div>
+        </div>
+        <div class="col-sm-2">
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" id="fixwhitecenter" class="bivariateOpts"  /> Fix center step to white?
+                </label>
+            </div>    
+        </div>
+        <div class="col-sm-2">
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" id="doconfidence" class="bivariateOpts" checked /> Do confidence?
+                </label>
+            </div>
+        </div>
+        <div class="col-sm-3">
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" id="dolightbinning" class="bivariateOpts" checked /> Do Confidence Binning?
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="faq" class="modal fade" tabIndex="-2" role="dialog" aria-labelledby="faqLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title" id="faqLabel">How to Use MatrixViewer JS</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    This project is a JavaScript implementation of viewing data encoded in a matrix around the matrix diagonal.  The current use case is to find co-occurrences in viral populations, which can indicate how viruses adapt to environmental pressures, such as the host organism's immune system.
+                </p><p>
+                    This current implementation is architected by <a href="http://cs.wisc.edu/~sarikaya" target="_blank">Alper Sarikaya</a> to test the practicality of WebGL as a visualization medium.  The project is version-controlled in a private repository.  The stable version of the visualization is available (temporarily) <a href="http://cs.wisc.edu/~sarikaya/static/cooccur" target="_new">here</a>, while an in-progress version is available <a href="http://cs.wisc.edu/~sarikaya/research/cooccur" target="_new">here</a>.
+                </p>
+                <p>&nbsp;</p>
+                
+                <h4>Interacting with the Data</h4>
+                <p>
+                    The data is displayed diagonally by default, with the <strong>i</strong>th position on the y-axis, and the <strong>j</strong>th position on the x-axis.  The following methods itemize the ways to interact with the visualization.
+                </p>
+                    
+                <ul id="interactionList">
+                    <li><em class="stronk">Clicking in the overview</em> will navigate the main view to the area highlighted by the green bar.  The mouse must stay within the top bar when panning the dataset.</li>
+                    <li><em class="stronk">Using the scroll wheel</em> within the canvas will change the zoom level of the current view.  The position of the cursor will focus the area of zoom, but the zoom position will always be fixed toward the diagonal of the matrix.</li>
+                    <li><em class="stronk">Hovering the mouse</em> over the dataset at a particular position brings up the encoded data in the 'super-zoom' at top-right, which shows the a view of the current coordinates and metric value(s) under the mouse.</li>
+                    <li><em class="stronk">Clicking the dataset</em> will freeze the 'super-zoom' (which will blink), allowing for more detailed examination of the data.  Further, <em class="stronk">clicking on a 'pixel' in the 'super-zoom'</em> will display the counts of non-variant and variant reads in the below view.</li>
+                    <li><em class="stronk">Clicking a count rectangle</em> in the counts view will condition the reads of the paired read.  This conditioned view can be reset by again clicking on the appropriate pixel in the 'super-zoom.'</li>
+                    <li><em class="stronk">Switching the <strong>metric</strong></em> will cause the visualization to ask for the data file (up to 15 seconds) and load it into the visualization (1 second).  The equation used to compute each metric is displayed below the drop-down.</li>
+                    <li><em class="stronk">Enabling <strong>gating</strong></em> will blank out any color if the <strong>i</strong>th position does not contain at least <strong>x%</strong> variants.  This helps to elimate noise in the visualization and promotes salience of highly-correlated variants.</li>
+                </ul>
+                <p>&nbsp;</p>
+                
+                <h4>Implementation Notes</h4>
+                <p>
+                    This implementation has been tested in Google Chrome (v36) and Firefox (v32).  Client computers must support WebGL (GPU, drivers, browser, OS) and the <strong>OES_float_texture</strong> WebGL extension for correct rendering. Check WebGL support of your current configuration on <a href="http://webglreport.com/" target="_blank">WebGL Report</a>. Internet Explorer and Safari do not support WebGL due to security concerns.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <p class="pull-left small" style="margin-top: 10px;">&copy; 2014 &mdash; <a href="http://graphics.cs.wisc.edu" target="_new">UW Graphics Group</a>, <a href="http://wisc.edu" target="_new">University of Wisconsin-Madison</a></p>
+                <button class="btn btn-success" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- load scripts down here -->
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <!--<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>-->
+    <script src="lib/d3.min.js" charset="utf-8"></script>
+    
+    <!-- helps with parsing mousewheel events -->
+    <script type="text/javascript" src="lib/jquery.mousewheel.js"></script>
+    
+    <!-- boostrap -->
+    <script type="text/javascript" src="lib/bootstrap.min.js"></script>
+    <script type="text/javascript" src="lib/bootstrap-slider.js"></script>
+    
+    <!-- adds ability to push/pop matrices, and adds matrix classes/functions -->
+    <!-- https://github.com/evanw/lightgl.js/ -->
+    <script type="text/javascript" src="lib/lightgl.js"></script>
+    
+    <!--<script type="text/javascript" src="bitmap.js"></script>-->
+    <script type="text/javascript" src="colorbrewer.js"></script>
+    <script type="text/javascript" src="binarytojson.js"></script>
+    
+
+</body>
+</html>
