@@ -44,7 +44,7 @@
                             <span class="sr-only">Toggle Dropdown</span>
                         </button>
                         <ul class="dropdown-menu" role="menu" id="datasetOptions">
-                            <li><a href="#">SHFV</a></li>
+                            <li><a href="#">[loading...]</a></li>
                             <li><a href="#">SHIV</a></li>
                         </ul>
                     </div>
@@ -59,111 +59,9 @@
 </nav>
 
 <div class="container-fluid">
-    <div class="row" style="height: 900px;">
-        <!-- canvas(es) will be added here -->
-        <div class="col-sm-12" id="canvas-container">
-            <div id="loading">
-                <span id="status">Loading components...</span>
-            </div>
-            <div id="canvas-labels">
-                <div id="label-xmin"></div>
-                <div id="label-xmax"></div>
-                <div id="label-ymin"></div>
-                <div id="label-ymax"></div>
-            </div>
-            <div id="super-zoom"></div>
-            <svg id="detail" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"></svg>
-            <svg id="legend" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"></svg>
-            <div id="chooser">
-                <div class="form-group">
-                    <label for="datafile">Dataset File: </label>
-                    <select id="datafile" class="form-control" style="width: auto; display:inline-block;">
-                        <option selected>readBreadth.dat</option>
-                        <option>alternative</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="metrics">Metrics:</label>
-                    <select id="metrics" class="form-control" style="width: auto; display:inline-block;">
-                        <option selected>conjProbDiff.dat</option>
-                        <option>conjProbDiff-old.dat</option>
-                        <option>conjProbDiff-ratio.dat</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="gateLevel">Gating:</label>
-                    <input type="checkbox" id="dogating" />
-                    <input id="gateLevel" type="text" data-slider-min="0" data-slider-max="50" data-slider-step="1" data-slider-value="10" data-slider-enabled="false" />
-                    <span id="gateVal">10</span>
-                </div>
-                
-                <img src="img/conjProbDiff.dat.png" id="metriceq" />
-                
-            </div>
-        </div>
-    </div>
-    
-    <div class="row"></div>
-    
-    <div class="row" style="margin-top: 30px;">
-        <div class="col-sm-12" id="img-container">
-        
-        </div>
-    </div>
-    
     <div class="row">
-        <div class="col-sm-offset-4 col-sm-2">
-            <div class="checkbox">
-                <label>
-                    <input type="checkbox" id="dodiagonal" checked /> Show diagonally?         
-                </label>
-            </div>
-        </div>
-        <div class="col-sm-6">
-            <div class="checkbox">
-                <label>
-                    <input type="checkbox" id="usecolorbrewer" checked disabled/> Use Colorbrewer?
-                </label>
-            </div>
-        </div>
-    </div>
-    <div class="row">
-        <div class="col-sm-offset-1 col-sm-2">
-            <div class="checkbox">
-                <label>
-                    <input type="checkbox" id="dodarkening" class="bivariateOpts" /> Darken (confidence)
-                </label>
-            </div>
-        </div>
-        <div class="col-sm-2">
-            <div class="checkbox">
-                <label>
-                    <input type="checkbox" id="useisoluminant" class="bivariateOpts" /> Isoluminant ramp?
-                </label>
-            </div>
-        </div>
-        <div class="col-sm-2">
-            <div class="checkbox">
-                <label>
-                    <input type="checkbox" id="fixwhitecenter" class="bivariateOpts"  /> Fix center step to white?
-                </label>
-            </div>    
-        </div>
-        <div class="col-sm-2">
-            <div class="checkbox">
-                <label>
-                    <input type="checkbox" id="doconfidence" class="bivariateOpts" checked /> Do confidence?
-                </label>
-            </div>
-        </div>
-        <div class="col-sm-3">
-            <div class="checkbox">
-                <label>
-                    <input type="checkbox" id="dolightbinning" class="bivariateOpts" checked /> Do Confidence Binning?
-                </label>
-            </div>
+        <div class="col-sm-12">
+            <svg id="d3canvas" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
     </div>
 </div>
@@ -230,8 +128,7 @@
     
     <!--<script type="text/javascript" src="bitmap.js"></script>-->
     <script type="text/javascript" src="colorbrewer.js"></script>
-    <script type="text/javascript" src="binarytojson.js"></script>
-    
+    <script type="text/javascript" src="binarytojson.js"></script>    
 
 </body>
 </html>

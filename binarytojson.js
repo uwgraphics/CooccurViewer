@@ -7,6 +7,7 @@ var ds = {
 
 // JSON object to hold metrics for each pair of positions
 var metrics = {};
+var filtered = {};
 
 // JSON object to hold the 2x2 matrix of counts for each pair of positions
 var counts = {};
@@ -30,7 +31,6 @@ var loadBinaryData = function(data, name) {
   ready = false;
 
   console.time("parsing file " + name);
-  console.log("starting...");
 
   var dv = new DataView(data);
 
@@ -101,18 +101,26 @@ var loadBinaryData = function(data, name) {
   if (!metrics.hasOwnProperty('bounds'))
     metrics['bounds'] = {};
 
-  metrics['bounds'][name] = {max: -1000000, min: 1000000};
+  if (thisSpacing > 1) {
+    metrics['bounds'][name] = [];
+    for (var n = 0; n < thisSpacing; n++) {
+      metrics['bounds'][name][n] = {max: -1000000, min: 1000000};
+    }
+  } else {
+    metrics['bounds'][name] = {max: -1000000, min: 1000000};
+  }
 
   // explode out the sparse representation to a full representation for the GPU
   var offset = headerSize;
   if (isSparse) {
+    console.log(name + " is sparse...");
     for (var n = 0; n < expectedPositions; n++) {
       var curIndex = dv.getInt32(offset);
       offset += 4;
 
-      // okay, so we have the index. convert into i, j coordinates
-      var i = Math.floor(curIndex / ds.numWindow);
-      var j = i - Math.floor(ds.numWindow / 2) + (curIndex % ds.numWindow);
+      // okay, so we have the index (0-indexed); convert into i, j coordinates (1-index)
+      var i = Math.floor(curIndex / ds.numWindow) + 1;
+      var j = (i - 1) - Math.floor(ds.numWindow / 2) + (curIndex % ds.numWindow) + 1;
 
       // create an entry for i if it doesn't exist
       if (!metrics.hasOwnProperty(i))
@@ -123,18 +131,35 @@ var loadBinaryData = function(data, name) {
         metrics[i][j] = {};
 
       // fill in the metric
-      var curVal = getDataVal(offset);
-      metrics[i][j][name] = curVal;
+      if (thisSpacing > 1) { 
+        if (!metrics[i][j].hasOwnProperty(name))
+          metrics[i][j][name] = [];
+      
+        for (var k = 0; k < thisSpacing; k++) {
+          var curVal = getDataVal(offset);
+          metrics[i][j][name][k] = curVal;
+          
+          // calculate bounds
+          metrics['bounds'][name][k]['max'] = Math.max(metrics['bounds'][name][k]['max'], curVal);
+          metrics['bounds'][name][k]['min'] = Math.min(metrics['bounds'][name][k]['min'], curVal);
+          
+          offset += precision;
+        }
+      } else {
+        var curVal = getDataVal(offset);
+        metrics[i][j][name] = curVal;
 
-      // calculate bounds
-      metrics['bounds'][name]['max'] = Math.max(metrics['bounds'][name]['max'], curVal);
-      metrics['bounds'][name]['min'] = Math.min(metrics['bounds'][name]['min'], curVal);
+        // calculate bounds
+        metrics['bounds'][name]['max'] = Math.max(metrics['bounds'][name]['max'], curVal);
+        metrics['bounds'][name]['min'] = Math.min(metrics['bounds'][name]['min'], curVal);
 
-      // increment the offset counter
-      offset += precision;
+        // increment the offset counter
+        offset += precision;
+      }
     }
   } else {
-	for (var i = 0; i < numPositions; i++) {
+    console.log(name + " is dense...");
+    for (var i = 0; i < numPositions; i++) {
       for (var j = windowOffset; j < ds.numWindow - windowOffset; j++) {
         for(var n = 0; n < thisSpacing; n++) {
           var curVal = getDataVal(offset);
@@ -142,34 +167,44 @@ var loadBinaryData = function(data, name) {
           // increment the offset counter
           offset += precision;
 
-		  // if this number is zero, don't bother recording it
-		  if (curVal == 0)
-			continue;
+          // if this number is zero, don't bother recording it
+          if (curVal == 0)
+            continue;
 
-		  // calculate these indicies
-		  var index_i = i;
-		  var index_j = i - Math.floor(ds.numWindow / 2) + j;
+          // calculate these indicies (and convert to 1-indexed)
+          var index_i = i + 1;
+          var index_j = (i - 1) - Math.floor(ds.numWindow / 2) + j + 1;
 
-		  // create an entry for i if it doesn't exist
-		  if (!metrics.hasOwnProperty(index_i))
-			metrics[index_i] = {};
+          // create an entry for i if it doesn't exist
+          if (!metrics.hasOwnProperty(index_i))
+            metrics[index_i] = {};
 
-		  // create an entry for i > j if it doesn't exist
-		  if (!metrics[index_i].hasOwnProperty(index_j))
-			metrics[index_i][index_j] = {};
+          // create an entry for i > j if it doesn't exist
+          if (!metrics[index_i].hasOwnProperty(index_j))
+            metrics[index_i][index_j] = {};
+            
+          // if there is more than one possible value per position pair, 
+          // create an entry for i > j > name > n
+          if (thisSpacing > 1) {
+            if (!metrics[index_i][index_j].hasOwnProperty(name)) 
+              metrics[index_i][index_j][name] = [];
+            
+            metrics[index_i][index_j][name][n] = curVal;
+          } else {
+            // fill in the metric
+            metrics[index_i][index_j][name] = curVal;
+          }
 
-		  // fill in the metric
-		  metrics[index_i][index_j][name] = curVal;
-
-		  // calculate bounds
-		  metrics['bounds'][name]['max'] = Math.max(metrics['bounds'][name]['max'], curVal);
-		  metrics['bounds'][name]['min'] = Math.min(metrics['bounds'][name]['min'], curVal);
+          // calculate bounds
+          metrics['bounds'][name]['max'] = Math.max(metrics['bounds'][name]['max'], curVal);
+          metrics['bounds'][name]['min'] = Math.min(metrics['bounds'][name]['min'], curVal);
         }
       }
     }
   }
 
   console.timeEnd("parsing file " + name);
+  continueIfDone();
 };
 
 var makeBinaryFileRequest = function(filename, name) {
@@ -195,3 +230,92 @@ var makeBinaryFileRequest = function(filename, name) {
 
   xhr.send(null);
 };
+
+var continueIfDone = function() {
+  
+  var theIs = Object.keys(metrics);
+  
+  // spin until all files have been parsed
+  if (theIs.length == 0)
+    return;
+    
+  // get an arbitrary index to play with
+  var i = theIs[Math.floor(Math.random() * theIs.length)];
+  
+  var theJs = Object.keys(metrics[i]);
+  var j = theJs[Math.floor(Math.random() * theJs.length)];
+  
+  var curVal = metrics[i][j];
+  if (!curVal.hasOwnProperty('metric') || !curVal.hasOwnProperty('depth') || !curVal.hasOwnProperty('counts')) {
+    console.log("still missing fields (" + i + ", " + j + ") .. waiting");
+    return;
+  }
+  
+  filterData();
+};
+  
+var filterData = function() {
+  
+  // try to filter out anything that doesn't meet the following criteria
+  minDepth = Math.floor(metrics['bounds']['depth']['max'] * 0.1);
+  minVariants = 0.1;
+  
+  // try filtering on depth
+  console.time("filtering");
+  filtered = {};
+  Object.keys(metrics).forEach(function(i) {
+    if (i == 'bounds')
+      return;
+  
+    var theJs = Object.keys(metrics[i]);
+    theJs.forEach(function(j) {
+      var curVal = metrics[i][j];
+      
+      // check for minimum depth; quit if fails
+      if (!curVal.hasOwnProperty('depth') || curVal.depth < minDepth)
+        return;
+        
+      // calculate the level of variance
+      if (!curVal.hasOwnProperty('counts')) {
+        console.log("missing counts from " + i + ", " + j);
+        return;
+      }
+      
+      thisLevel = (curVal.counts[2] + curVal.counts[3]) / curVal.depth;
+      if (thisLevel < minVariants)
+        return;
+        
+      // if all other checks pass, copy to filtered
+      if (!filtered.hasOwnProperty(i))
+        filtered[i] = {};
+      
+      filtered[i][j] = curVal;
+    });
+  });
+  
+  console.timeEnd("filtering");
+};
+
+var canvas = d3.select("#d3canvas")
+  .append('g')
+    .attr('transform', 'translate(50, 50)');
+var updateVis = function() { 
+};
+
+$(document).ready(function() {
+  makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/conjProbDiff.dat", "metric");
+  makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/variantCounts.dat", "counts");
+  makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/readBreadth.dat", "depth");
+  
+  console.log("done");
+  
+  // try to output a json file [doesn't work, json too big]
+  // <http://stackoverflow.com/questions/22055598/writing-a-json-object-to-a-text-file-in-javascript>
+  /*
+  var url = 'data:text/json;charset=utf8,' + encodeURIComponent(JSON.stringify(metrics));
+  console.log("finished");
+  window.open(url, '_blank');
+  window.focus();*/
+  
+  
+});

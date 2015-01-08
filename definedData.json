@@ -1,5 +1,5 @@
 {
-    "datasets": {
+  "datasets": {
     "SHFVkrc1_RC06": {
       "attenuation": "readBreadth.dat",
       "metrics": [
@@ -38,30 +38,6 @@
       "numPos": 20,
       "numReads": 15,
       "origData": "sampledata.sam"
-    },
-	"sampledata-new": {
-      "attenuation": "readBreadth.dat",
-      "metrics": [
-        "conjProbDiff.dat",
-        "conjProbDiff-ratio.dat"
-      ],
-      "variantCounts": "variantCounts.dat",
-      "numPos": 60,
-      "numReads": 25,
-      "origData": "sampledata.sam"
-    },
-    "H5N1_VHA4_SHA": {
-      "attenuation": "readBreadth.dat",
-      "metrics": [
-        "conjProbDiff.dat",
-        "conjProbDiff-ratio.dat",
-        "conjProbDiff-gated05.dat",
-        "conjProbDiff-outliers.dat"
-      ],
-      "variantCounts": "variantCounts.dat",
-      "numPos": 2500,
-      "numReads": 258000,
-      "origData": "VHA4_SHA_P11_F21_DPI3_R1_I18_C21.sam"
     },
 	"VHA4_P11_F21_DPI3-ref": {
       "attenuation": "readBreadth.dat",

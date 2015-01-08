@@ -214,3 +214,9 @@ svg .axis text {
 	color: #F07C68;
 }
 
+/** D3viewer styles **/
+#d3canvas {
+	width: 800px;
+	height: 800px;
+	border: 1px solid #000;
+}
