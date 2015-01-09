@@ -216,7 +216,11 @@ svg .axis text {
 
 /** D3viewer styles **/
 #d3canvas {
-	width: 800px;
+	width: 1000px;
 	height: 800px;
 	border: 1px solid #000;
+}
+
+#d3canvas text.label {
+	text-anchor: middle;
 }

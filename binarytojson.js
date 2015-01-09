@@ -9,6 +9,12 @@ var ds = {
 var metrics = {};
 var filtered = {};
 
+// parameters to filter on (eventually make these user-configurable)
+var minDepthPercent = 0.25;
+var minVariants = 0.1;
+var minVarJ = true;
+var minMetric = 0.3;
+
 // JSON object to hold the 2x2 matrix of counts for each pair of positions
 var counts = {};
 
@@ -252,26 +258,29 @@ var continueIfDone = function() {
   }
   
   filterData();
+  updateVis();
 };
   
 var filterData = function() {
   
   // try to filter out anything that doesn't meet the following criteria
-  minDepth = Math.floor(metrics['bounds']['depth']['max'] * 0.1);
-  minVariants = 0.1;
   
   // try filtering on depth
   console.time("filtering");
-  filtered = {};
+  filtered = [];
   Object.keys(metrics).forEach(function(i) {
     if (i == 'bounds')
       return;
+      
+    // coerce to number
+    i = +i;
   
     var theJs = Object.keys(metrics[i]);
     theJs.forEach(function(j) {
       var curVal = metrics[i][j];
       
       // check for minimum depth; quit if fails
+      var minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
       if (!curVal.hasOwnProperty('depth') || curVal.depth < minDepth)
         return;
         
@@ -281,15 +290,52 @@ var filterData = function() {
         return;
       }
       
-      thisLevel = (curVal.counts[2] + curVal.counts[3]) / curVal.depth;
+      var thisLevel = (curVal.counts[2] + curVal.counts[3]) / curVal.depth;
       if (thisLevel < minVariants)
         return;
         
+      // do we enforce a minimum variance for j as well?
+      thisLevel = (curVal.counts[1] + curVal.counts[3]) / curVal.depth;
+      if (minVarJ && thisLevel < minVariants)
+        return;
+        
+      // check for minimum co-occurrence metric
+      if (!curVal.hasOwnProperty('metric') || Math.abs(curVal.metric) < minMetric)
+        return;
+        
+      curVal.posi = i;
+      curVal.posj = j;
+        
       // if all other checks pass, copy to filtered
+      // search if this i already exists: add if not, append to existing if so
+      var foundExisting = false;
+      for (var n = 0; n < filtered.length; n++) {
+        var curEntry = filtered[n];
+        if (curEntry.pos === i) {
+          // TODO: update 'interesting-ness' score for i
+          curEntry.relatedPairs.push(curVal);
+          curEntry.numFound++;
+          foundExisting = true;
+          break;
+        }
+      }
+      
+      if (!foundExisting) {
+        var newEntry = {
+          pos: i, 
+          numFound: 1, 
+          relatedPairs: [curVal], 
+          interestingness: 0
+        };
+        
+        filtered.push(newEntry);
+      }
+      
+      /*
       if (!filtered.hasOwnProperty(i))
         filtered[i] = {};
       
-      filtered[i][j] = curVal;
+      filtered[i][j] = curVal;*/
     });
   });
   
@@ -298,8 +344,49 @@ var filterData = function() {
 
 var canvas = d3.select("#d3canvas")
   .append('g')
-    .attr('transform', 'translate(50, 50)');
+    .attr('transform', 'translate(30, 30)');
+    
+var x = d3.scale.ordinal()
+  .rangeBands([0, 940], 0.1);
+    
 var updateVis = function() { 
+  // do the brain-dead thing and just wipe everything
+  canvas.selectAll('g.ipos').remove();
+
+  // assume that filtered is populated here
+  var ipos = canvas.selectAll('g.ipos')
+    .data(filtered, function(d) { return d.pos });
+    
+    // set the x domain
+    x.domain(filtered.map(function(d) { return d.pos; }));
+    
+  // ENTER STEP
+  var newPos = ipos.enter()
+    .append('g')
+      .attr('class', 'ipos')
+      .attr('transform', function(d) { 
+        return 'translate(' + x(d.pos) + ',0)';
+      });
+      
+  var barHeight = 20;
+      
+  newPos.append('rect')
+    .attr('width', x.rangeBand())
+    .attr('height', barHeight)
+    .style('fill', '#f00');
+    
+  newPos.append('text')
+    .attr('class', 'label')
+    .attr('x', x.rangeBand() / 2)
+    .attr('y', 0)
+    .text(function(d) { return d.pos; });
+  
+  // ENTER + UPDATE STEP
+  
+  
+  // EXIT STEP
+  
+  
 };
 
 $(document).ready(function() {
