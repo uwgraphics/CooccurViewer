@@ -342,23 +342,86 @@ var filterData = function() {
   console.timeEnd("filtering");
 };
 
+var checkFilterEntry = function(i, j) {
+  curVal = metrics[i][j];
+  
+   // check for minimum depth; quit if fails
+  var minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
+  if (!curVal.hasOwnProperty('depth') || curVal.depth < minDepth) {
+    console.warn("position (%d, %d) failed depth check: wanted %f% of %d (%d), found %d (%s%)",
+      i, j, Math.floor(minDepthPercent * 100), metrics['bounds']['depth']['max'], minDepth, curVal.depth, (curVal.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2));
+    return false;
+  }
+  
+  console.log("passed depth check: %d > %d (%s% > %d%)", curVal.depth, minDepth, (curVal.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2), Math.floor(minDepthPercent * 100));
+    
+  // calculate the level of variance
+  if (!curVal.hasOwnProperty('counts')) {
+    console.log("missing counts from " + i + ", " + j);
+    return false;
+  }
+  
+  var thisLevel = (curVal.counts[2] + curVal.counts[3]) / curVal.depth;
+  if (thisLevel < minVariants) {
+    console.warn("position (%d, %d) failed i variant percentage check; wanted %f% for pos %d, got %s% instead", i, j, Math.floor(minVariants * 100), i, (thisLevel * 100).toFixed(2));
+    return false;
+  }
+  
+  console.log("passed variant i check: %s% > %f% (%d + %d / %d)", (thisLevel * 100).toFixed(2), Math.floor(minVariants * 100), curVal.counts[2], curVal.counts[3], curVal.depth);
+    
+  // do we enforce a minimum variance for j as well?
+  thisLevel = (curVal.counts[1] + curVal.counts[3]) / curVal.depth;
+  if (minVarJ && thisLevel < minVariants) {
+    console.warn("position (%d, %d) failed i variant percentage check; wanted %f% for pos %d, got %s% instead", i, j, Math.floor(minVariants * 100), j, (thisLevel * 100).toFixed(2)); 
+    return false;
+  }
+  
+  console.log("passed variant j check: %s% > %f% (%d + %d / %d)", (thisLevel * 100).toFixed(2), Math.floor(minVariants * 100), curVal.counts[1], curVal.counts[3], curVal.depth);
+    
+  // check for minimum co-occurrence metric
+  if (!curVal.hasOwnProperty('metric') || Math.abs(curVal.metric) < minMetric) {
+    console.warn("position (%d, %d) failed metric check; wanted abs(metric) > %f, got %s instead", i, j, minMetric, curVal.metric.toFixed(4));
+    return false;
+  }
+  
+  console.log("passed metric test: abs(%s) > %f", curVal.metric.toFixed(4), minMetric);
+  
+  return true;
+};
+
 var canvas = d3.select("#d3canvas")
   .append('g')
     .attr('transform', 'translate(30, 30)');
     
+var detailView = d3.select("#d3canvas")
+  .append('g')
+    .attr('class', 'detail')
+    .attr('transform', 'translate(30, 100)');
+      
 var x = d3.scale.ordinal()
   .rangeBands([0, 940], 0.1);
+  
+var y = d3.scale.ordinal()
+  .rangeBands([0, 670], 0.1);
+  
+var metricScale = d3.scale.quantize()
+  .range(colorbrewer.RdBu[9]);
     
 var updateVis = function() { 
   // do the brain-dead thing and just wipe everything
   canvas.selectAll('g.ipos').remove();
+  
+  metricScale.domain([
+    metrics.bounds.metric.max, 
+    metrics.bounds.metric.min
+  ]);
 
   // assume that filtered is populated here
   var ipos = canvas.selectAll('g.ipos')
     .data(filtered, function(d) { return d.pos });
     
-    // set the x domain
-    x.domain(filtered.map(function(d) { return d.pos; }));
+  // set the x domain
+  x.domain(filtered.map(function(d) { return d.pos; }));
     
   // ENTER STEP
   var newPos = ipos.enter()
@@ -373,7 +436,42 @@ var updateVis = function() {
   newPos.append('rect')
     .attr('width', x.rangeBand())
     .attr('height', barHeight)
-    .style('fill', '#f00');
+    .style('fill', '#f00')
+    .on('click', function(datum, i) {
+      var jpos = detailView.selectAll('g.jpos')
+        .data(filtered[i].relatedPairs, function(d) { return d.posi + "," + d.posj }); 
+        
+      y.domain(filtered[i].relatedPairs.map(function(d) { return d.posj; }));
+        
+      // ENTER STEP
+      var newJpos = jpos.enter()
+        .append('g')
+          .attr('class', 'jpos')
+          .attr('transform', function(d) {
+            return 'translate(' + x(datum.pos) + ',' + y(d.posj) + ')';
+          });
+          
+      newJpos.append('rect')
+        .attr('height', y.rangeBand())
+        .attr('width', x.rangeBand())
+        .attr('x', 0)
+        .attr('y', 0)
+        .style('fill', function(d) { return metricScale(d.metric); });
+          
+      newJpos.append('text')
+        .attr('class', 'label')
+        .attr('x', 0)
+        .attr('y', function(d) { return y.rangeBand() / 2; })
+        .text(function(d) { return d.posj; });
+        
+      // EXIT STEP
+      jpos.exit()
+        .transition()
+          .duration(500)
+          .attr('y', 70)
+          .style('fill-opacity', 1e-6)
+          .remove();
+    });
     
   newPos.append('text')
     .attr('class', 'label')
