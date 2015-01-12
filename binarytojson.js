@@ -179,7 +179,7 @@ var loadBinaryData = function(data, name) {
 
           // calculate these indicies (and convert to 1-indexed)
           var index_i = i + 1;
-          var index_j = (i - 1) - Math.floor(ds.numWindow / 2) + j + 1;
+          var index_j = i - Math.floor(ds.numWindow / 2) + j + 1;
 
           // create an entry for i if it doesn't exist
           if (!metrics.hasOwnProperty(index_i))
