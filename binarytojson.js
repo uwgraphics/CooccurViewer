@@ -395,31 +395,55 @@ var canvas = d3.select("#d3canvas")
   .append('g')
     .attr('transform', 'translate(30, 30)');
     
+var overview = d3.select("#d3canvas")
+  .append('g')
+    .attr('class', 'overview')
+    .attr('transform', 'translate(30, 30)');
+    
 var detailView = d3.select("#d3canvas")
   .append('g')
     .attr('class', 'detail')
-    .attr('transform', 'translate(30, 100)');
+    .attr('transform', 'translate(30, 150)');
       
 var x = d3.scale.ordinal()
   .rangeBands([0, 940], 0.1);
   
 var y = d3.scale.ordinal()
-  .rangeBands([0, 670], 0.1);
+  .rangeBands([0, 620], 0.1);
+  
+var miniBarY = d3.scale.ordinal()
+  .domain(['depth', 'variant', 'metric'])
+  .rangeBands([0,100], 0.1);
+  
+var miniBarHeight = 100;
+  
+var depthScale = d3.scale.quantize()
+  .range(colorbrewer.Greens[7])
+  
+var variantScale = d3.scale.quantize()
+  .domain([0, 1])
+  .range(colorbrewer.Reds[7]);
   
 var metricScale = d3.scale.quantize()
+  .domain([0, 1])
+  .range(colorbrewer.Purples[7]);
+  
+var metricColorScale = d3.scale.quantize()
   .range(colorbrewer.RdBu[9]);
     
 var updateVis = function() { 
   // do the brain-dead thing and just wipe everything
-  canvas.selectAll('g.ipos').remove();
+  overview.selectAll('g.ipos').remove();
   
-  metricScale.domain([
+  // set domains that depend on bounds of data
+  metricColorScale.domain([
     metrics.bounds.metric.max, 
     metrics.bounds.metric.min
   ]);
+  depthScale.domain([metrics.bounds.depth.min, metrics.bounds.depth.max]);
 
   // assume that filtered is populated here
-  var ipos = canvas.selectAll('g.ipos')
+  var ipos = overview.selectAll('g.ipos')
     .data(filtered, function(d) { return d.pos });
     
   // set the x domain
@@ -431,86 +455,129 @@ var updateVis = function() {
       .attr('class', 'ipos')
       .attr('transform', function(d) { 
         return 'translate(' + x(d.pos) + ',0)';
+      })
+      .on('click', function(datum, i) {
+        var jpos = detailView.selectAll('g.jpos')
+          .data(filtered[i].relatedPairs, function(d) { return d.posi + "," + d.posj }); 
+          
+        y.domain(filtered[i].relatedPairs.map(function(d) { return d.posj; }));
+          
+        // ENTER STEP
+        var newJpos = jpos.enter()
+          .append('g')
+            .attr('class', 'jpos')
+            .attr('transform', function(d) {
+              return 'translate(' + x(datum.pos) + ',' + y(d.posj) + ')';
+            });
+            
+        newJpos.append('rect')
+          .attr('height', y.rangeBand())
+          .attr('width', x.rangeBand())
+          .attr('x', 0)
+          .attr('y', 0)
+          .style('fill', function(d) { return metricColorScale(d.metric); })
+          .on('click', function(d) {
+            checkFilterEntry(d.posi, d.posj);
+          });
+          
+        var newDetail = newJpos.append('g')
+          .attr('class', 'detail')
+          .attr('transform',
+            'translate(' + (x.rangeBand() + 3) + "," + (y.rangeBand() / 2 - 30) + ')'
+          );
+          
+        newDetail.append('text')
+          .text(function(d) { return "Position: " + d.posi + ", " + d.posj; });
+          
+        newDetail.append('text')
+          .attr('y', 15)
+          .text(function(d) {
+            var varPer = (d.counts[2] + d.counts[3]) / d.depth * 100;
+            return "Variant % at " + d.posi + ": " + varPer.toFixed(2) + "%";
+          });
+          
+        newDetail.append('text')
+          .attr('y', 30)
+          .text(function(d) {
+            var varPer = (d.counts[1] + d.counts[3]) / d.depth * 100;
+            return "Variant % at " + d.posj + ": " + varPer.toFixed(2) + "%";
+          });
+          
+        newDetail.append('text')
+          .attr('y', 45)
+          .text(function(d) {
+            return d.depth + " reads span these two locations";
+          });
+          
+        newDetail.append('text')
+          .attr('y', 60)
+          .text(function(d) {
+            return "Metric: " + d.metric.toFixed(3);
+          });
+          
+        // EXIT STEP
+        jpos.exit()
+          .transition()
+            .duration(500)
+            .attr('y', 70)
+            .style('fill-opacity', 1e-6)
+            .remove();
       });
       
   var barHeight = 20;
       
+  /*
   newPos.append('rect')
     .attr('width', x.rangeBand())
     .attr('height', barHeight)
-    .style('fill', '#f00')
-    .on('click', function(datum, i) {
-      var jpos = detailView.selectAll('g.jpos')
-        .data(filtered[i].relatedPairs, function(d) { return d.posi + "," + d.posj }); 
-        
-      y.domain(filtered[i].relatedPairs.map(function(d) { return d.posj; }));
-        
-      // ENTER STEP
-      var newJpos = jpos.enter()
-        .append('g')
-          .attr('class', 'jpos')
-          .attr('transform', function(d) {
-            return 'translate(' + x(datum.pos) + ',' + y(d.posj) + ')';
-          });
-          
-      newJpos.append('rect')
-        .attr('height', y.rangeBand())
-        .attr('width', x.rangeBand())
-        .attr('x', 0)
-        .attr('y', 0)
-        .style('fill', function(d) { return metricScale(d.metric); })
-        .on('click', function(d) {
-          checkFilterEntry(d.posi, d.posj);
-        });
-        
-      var newDetail = newJpos.append('g')
-        .attr('class', 'detail')
-        .attr('transform',
-          'translate(' + (x.rangeBand() + 3) + "," + (y.rangeBand() / 2 - 30) + ')'
-        );
-        
-      newDetail.append('text')
-        .text(function(d) { return "Position: " + d.posi + ", " + d.posj; });
-        
-      newDetail.append('text')
-        .attr('y', 15)
-        .text(function(d) {
-          var varPer = (d.counts[2] + d.counts[3]) / d.depth * 100;
-          return "Variant % at " + d.posi + ": " + varPer.toFixed(2) + "%";
-        });
-        
-      newDetail.append('text')
-        .attr('y', 30)
-        .text(function(d) {
-          var varPer = (d.counts[1] + d.counts[3]) / d.depth * 100;
-          return "Variant % at " + d.posj + ": " + varPer.toFixed(2) + "%";
-        });
-        
-      newDetail.append('text')
-        .attr('y', 45)
-        .text(function(d) {
-          return d.depth + " reads span these two locations";
-        });
-        
-      newDetail.append('text')
-        .attr('y', 60)
-        .text(function(d) {
-          return "Metric: " + d.metric.toFixed(3);
-        });
-        
-      // EXIT STEP
-      jpos.exit()
-        .transition()
-          .duration(500)
-          .attr('y', 70)
-          .style('fill-opacity', 1e-6)
-          .remove();
+    .style('fill', '#f00');*/
+  
+  newPos.append('rect')
+    .attr('class', 'depth')
+    .attr('x', 0)
+    .attr('y', miniBarY('depth'))
+    .attr('height', miniBarY.rangeBand())
+    .attr('width', x.rangeBand())
+    .style('fill', function(d) {
+      return depthScale(d3.max(d.relatedPairs, function(e) { return e.depth; }));
+    });
+    
+  newPos.append('rect')
+    .attr('class', 'variant')
+    .attr('x', 0)
+    .attr('y', miniBarY('variant'))
+    .attr('height', miniBarY.rangeBand())
+    .attr('width', x.rangeBand())
+    .style('fill', function(d) {
+      var imax = d3.max(d.relatedPairs, function(e) {
+        return (e.counts[2] + e.counts[3]) / e.depth;
+      });
+      
+      var jmax = d3.max(d.relatedPairs, function(e) {
+        return (e.counts[1] + e.counts[3]) / e.depth;
+      });
+      
+      return variantScale(Math.max(imax, jmax));
+    });
+    
+  newPos.append('rect')
+    .attr('class', 'metric')
+    .attr('x', 0)
+    .attr('y', miniBarY('metric'))
+    .attr('height', miniBarY.rangeBand())
+    .attr('width', x.rangeBand())
+    .style('fill', function(d) {
+      return metricScale(
+        d3.max(d.relatedPairs, function(e) { 
+          return Math.abs(e.metric); 
+        })
+      );
     });
     
   newPos.append('text')
-    .attr('class', 'label')
+    .attr('class', 'labelpos')
     .attr('x', x.rangeBand() / 2)
-    .attr('y', 0)
+    .attr('y', miniBarHeight + 15)
     .text(function(d) { return d.pos; });
   
   // ENTER + UPDATE STEP

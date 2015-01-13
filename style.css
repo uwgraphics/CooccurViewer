@@ -215,13 +215,29 @@ svg .axis text {
 }
 
 /** D3viewer styles **/
+#depth-slider .slider-handle {
+	background-color: #005a32;
+	background-image: linear-gradient(to bottom, #00723b 0%, #005a32 100%);
+}
+
+#variant-slider .slider-handle {
+	background-color: #99000d;
+	background-image: linear-gradient(to bottom, #b20016 0%, #99000d 100%);
+}
+
+#metric-slider .slider-handle {
+	background-color: #4a1486;
+	background-image: linear-gradient(to bottom, #53199e 0%, #4a1486 100%);
+}
+
 #d3canvas {
 	width: 1000px;
 	height: 800px;
 	border: 1px solid #000;
 }
 
-#d3canvas text.label {
+#d3canvas text.labelpos {
+	font-size: 10px;
 	text-anchor: middle;
 }
 
