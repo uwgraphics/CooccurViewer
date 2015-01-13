@@ -345,6 +345,8 @@ var filterData = function() {
 var checkFilterEntry = function(i, j) {
   curVal = metrics[i][j];
   
+  console.log("---- comparison pos %d to %d", +i, +j);
+  
    // check for minimum depth; quit if fails
   var minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
   if (!curVal.hasOwnProperty('depth') || curVal.depth < minDepth) {
@@ -456,13 +458,45 @@ var updateVis = function() {
         .attr('width', x.rangeBand())
         .attr('x', 0)
         .attr('y', 0)
-        .style('fill', function(d) { return metricScale(d.metric); });
-          
-      newJpos.append('text')
-        .attr('class', 'label')
-        .attr('x', 0)
-        .attr('y', function(d) { return y.rangeBand() / 2; })
-        .text(function(d) { return d.posj; });
+        .style('fill', function(d) { return metricScale(d.metric); })
+        .on('click', function(d) {
+          checkFilterEntry(d.posi, d.posj);
+        });
+        
+      var newDetail = newJpos.append('g')
+        .attr('class', 'detail')
+        .attr('transform',
+          'translate(' + (x.rangeBand() + 3) + "," + (y.rangeBand() / 2 - 30) + ')'
+        );
+        
+      newDetail.append('text')
+        .text(function(d) { return "Position: " + d.posi + ", " + d.posj; });
+        
+      newDetail.append('text')
+        .attr('y', 15)
+        .text(function(d) {
+          var varPer = (d.counts[2] + d.counts[3]) / d.depth * 100;
+          return "Variant % at " + d.posi + ": " + varPer.toFixed(2) + "%";
+        });
+        
+      newDetail.append('text')
+        .attr('y', 30)
+        .text(function(d) {
+          var varPer = (d.counts[1] + d.counts[3]) / d.depth * 100;
+          return "Variant % at " + d.posj + ": " + varPer.toFixed(2) + "%";
+        });
+        
+      newDetail.append('text')
+        .attr('y', 45)
+        .text(function(d) {
+          return d.depth + " reads span these two locations";
+        });
+        
+      newDetail.append('text')
+        .attr('y', 60)
+        .text(function(d) {
+          return "Metric: " + d.metric.toFixed(3);
+        });
         
       // EXIT STEP
       jpos.exit()
@@ -491,6 +525,42 @@ $(document).ready(function() {
   makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/conjProbDiff.dat", "metric");
   makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/variantCounts.dat", "counts");
   makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/readBreadth.dat", "depth");
+
+  // set up sliders
+  $("#threshold-depth").slider({
+    tooltip: 'always',
+    formatter: function(val) { 
+      return ">" + val + "%";
+    }
+  });
+  
+  $("#threshold-variants").slider({
+    tooltip: 'always',
+    formatter: function(val) { 
+      return ">" + val + "%";
+    }
+  });
+  
+  $("#threshold-metric").slider({
+    tooltip: 'always',
+    formatter: function(val) {
+      return ">abs(" + val + ")";
+    }
+  });
+  
+  var refilter = function() {
+    minDepthPercent = +$("#threshold-depth").val() / 100;
+    minVariants = +$("#threshold-variants").val() / 100;
+    minMetric = +$("#threshold-metric").val();
+      
+    filterData();
+    updateVis();
+  };
+  
+  $("#threshold-depth").on('slideStop', refilter);
+  $("#threshold-variants").on('slideStop', refilter);
+  $("#threshold-metric").on('slideStop', refilter);
+  
   
   console.log("done");
   

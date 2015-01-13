@@ -224,3 +224,7 @@ svg .axis text {
 #d3canvas text.label {
 	text-anchor: middle;
 }
+
+#d3canvas g.detail text {
+	font-size: 0.85em;
+}
