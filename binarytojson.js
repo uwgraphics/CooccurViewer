@@ -591,65 +591,94 @@ var updateVis = function() {
        
         // var i to modal j
         var crossAngle = Math.PI / 4; // the angle at which to cross
-        var roundedCornerLength = 20;               // the length of the rounded corners
+        var roundedCornerLength = 20; // the length of the rounded corners
+        
+        var makeTransitionPath = function(thisDatum, isVarToNonVar) {
+          // the gap between this group and the other
+           var countGap = isVarToNonVar ? 
+            s(thisDatum, thisDatum.counts[1]) : s(thisDatum, thisDatum.counts[2]); 
+
+          // the number of counts in THIS group
+          var countThis = isVarToNonVar ? 
+            s(thisDatum, thisDatum.counts[2]) : s(thisDatum, thisDatum.counts[1]); 
+            
+          // if there's nothing to draw, short-circuit
+          if (countThis == 0)
+            return;
+            
+          // the number of counts ABOVE this group
+          var countThat = isVarToNonVar ? 
+            s(thisDatum, thisDatum.counts[3]) : s(thisDatum, thisDatum.counts[2] + thisDatum.counts[3]);
+        
+          // flips the y-axis transitions depending on the type being visualized
+          rev = isVarToNonVar ? 1 : -1;
+        
+          if (countGap == 0) {
+            return "M 290 " + countThat + " l -280 0 l 0 " + countThis + " l 280 0 l 0 " + countThis;
+          }
+        
+          var path = "M 290 " + countThat;
+          //path += " l -70 0"; // move 50px to lead curve (plus rdLen to account for returning curve... otherwise it pinches)
+      
+          var rdLen = roundedCornerLength;
+          var ctrlPtDrop = rdLen * Math.sin(crossAngle);
+          var ctrlPtLead = rdLen * Math.cos(crossAngle);
+
+          var transDrop = countGap - 2 * ctrlPtDrop;
+          var transLead = transDrop / Math.tan(crossAngle);
+
+          var lead = (300 - (4 * rdLen + 2 * ctrlPtLead + transLead)) / 2;
+          
+          // if transLead is negative, we don't have enough room for rdLen.
+          // revert to best fit
+          if (transDrop < 0) {
+            var diff = countGap;
+            rdLen = diff / 2 / Math.sin(crossAngle);
+            ctrlPtDrop = diff / 2;
+            ctrlPtLead = diff / 2 / Math.tan(crossAngle);
+            
+            transDrop = 0;
+            transLead = 0;
+            
+            lead = (280 - 2 * (rdLen + ctrlPtLead)) / 2;
+          }
+        
+          path += " l -" + (isVarToNonVar ? lead + rdLen : lead) + " 0";
+
+          path += " q -" + rdLen + " 0 -" + (ctrlPtLead + rdLen) + " " + (rev * ctrlPtDrop);
+          
+          path += " l -" + transLead + " " + (rev * transDrop);
+
+          path += " q -" + ctrlPtLead + " " + (rev * ctrlPtDrop) + " -" + (ctrlPtLead + rdLen) + " " + (rev * ctrlPtDrop);
+          path += " l -" + (isVarToNonVar ? lead : lead + rdLen) + " 0"; 
+
+          // now turn around and go back
+          path += " l 0 " + countThis;
+          path += " l " + (isVarToNonVar ? lead + rdLen : lead) + " 0";
+
+          path += " q " + rdLen + " 0 " + (ctrlPtLead + rdLen) + " " + (-rev * ctrlPtDrop);
+          path += " l " + transLead + " " + (-rev * transDrop);
+          path += " q " + ctrlPtLead + " " + (-rev * ctrlPtDrop) + " " + (ctrlPtLead + rdLen) + " " + (-rev * ctrlPtDrop);
+
+          path += " l " + (isVarToNonVar ? lead : lead + rdLen) + " 0";
+          path += " l 0 -" + countThis;
+
+          return path;
+        };
         
         cor.append('path')
           .attr('d', function(d) {
-            if (s(d, d.counts[1] == 0)) {
-              return "M 290 " + s(d, d.counts[3]) + " l -280 0 l 0 " + s(d, d.counts[2]) + " l 280 0 l 0 " + s(d, d.counts[2]);
-            }
-          
-            var path = "M 290 " + s(d, d.counts[3]);
-            //path += " l -70 0"; // move 50px to lead curve (plus rdLen to account for returning curve... otherwise it pinches)
-        
-            var rdLen = roundedCornerLength;
-            var ctrlPtDrop = rdLen * Math.sin(crossAngle);
-            var ctrlPtLead = rdLen * Math.cos(crossAngle);
-
-            var transDrop = s(d, d.counts[1]) - 2 * ctrlPtDrop;
-            var transLead = transDrop / Math.tan(crossAngle);
-
-            var lead = (300 - (4 * rdLen + 2 * ctrlPtLead + transLead)) / 2;
-            
-            // if transLead is negative, we don't have enough room for rdLen.
-            // revert to best fit
-            if (transDrop < 0) {
-              var diff = s(d, d.counts[1]);
-              rdLen = diff / 2 / Math.sin(crossAngle);
-              ctrlPtDrop = diff / 2;
-              ctrlPtLead = diff / 2 / Math.tan(crossAngle);
-              
-              transDrop = 0;
-              transLead = 0;
-              
-              lead = (280 - 2 * (rdLen + ctrlPtLead)) / 2;
-            }
-          
-            path += " l -" + (lead + rdLen) + " 0";
-
-            path += " q -" + rdLen + " 0 -" + (ctrlPtLead + rdLen) + " " + ctrlPtDrop;
-            
-            path += " l -" + transLead + " " + transDrop;
-
-            path += " q -" + ctrlPtLead + " " + ctrlPtDrop + " -" + (ctrlPtLead + rdLen) + " " + ctrlPtDrop;
-            path += " l -" + lead + " 0"; 
-
-            // now turn around and go back
-            path += " l 0 " + s(d, d.counts[2]);
-            path += " l " + (lead + rdLen) + " 0";
-
-            path += " q " + rdLen + " 0 " + (ctrlPtLead + rdLen) + " -" + ctrlPtDrop;
-            path += " l " + transLead + " -" + transDrop;
-            path += " q " + ctrlPtLead + " -" + ctrlPtDrop + " " + (ctrlPtLead + rdLen) + " -" + ctrlPtDrop;
-
-            path += " l " + lead + " 0";
-            path += " l 0 -" + s(d, d.counts[2]);
-
-            return path;
+            return makeTransitionPath(d, true);
           })
-          .style('fill', 'none')
-          .style('stroke', '#f00');
+          .style('fill', '#f00')
+          .style('stroke', '#000');
 
+        cor.append('path')
+          .attr('d', function(d) {
+            return makeTransitionPath(d, false);
+          })
+          .style('fill', '#0f0')
+          .style('stroke', '#000');
         
         /*
         cor.append('path')
