@@ -430,6 +430,8 @@ var metricScale = d3.scale.quantize()
   
 var metricColorScale = d3.scale.quantize()
   .range(colorbrewer.RdBu[9]);
+
+var detailScales = {};
     
 var updateVis = function() { 
   // do the brain-dead thing and just wipe everything
@@ -514,6 +516,130 @@ var updateVis = function() {
           .text(function(d) {
             return "Metric: " + d.metric.toFixed(3);
           });
+          
+        // handle making the correlation curves
+        var cor = newJpos.append('g')
+          .attr('class', 'correlation')
+          .attr('transform', 'translate(-300, 0)')
+          .attr('width', '300');
+       
+		// initialize the detail scales and 
+        // draw two blocks
+        var s = function(curData, counts) { 
+		  return detailScales[curData.posi + "," + curData.posj](counts);
+		};
+
+
+        cor.append('rect')
+          .attr('x', 0)
+          .attr('y', 0)
+          .attr('height', function(d) {
+			detailScales[d.posi + "," + d.posj] = d3.scale.linear()
+			  .domain([0, d.depth])
+			  .range([0, y.rangeBand()]);
+
+			return s(d, d.counts[1] + d.counts[3]);
+		  })
+          .attr('width', 10)
+          .style('fill', '#f00');
+          
+        cor.append('rect')
+          .attr('x', 0)
+          .attr('y', function(d) {
+			return s(d, d.counts[1] + d.counts[3]);
+		  })
+          .attr('height', function(d) {
+			return s(d, d.counts[0] + d.counts[2]);
+		  })
+          .attr('width', 10)
+          .style('fill', '#0f0');
+        
+
+		cor.append('rect')
+          .attr('x', 290)
+          .attr('y', 0)
+          .attr('height', function(d) {
+			return s(d, d.counts[2] + d.counts[3]);
+		  })
+          .attr('width', 10)
+          .style('fill', '#f00');
+          
+        cor.append('rect')
+          .attr('x', 290)
+          .attr('y', function(d) {
+			return s(d, d.counts[2] + d.counts[3]);
+		  })
+          .attr('height', function(d) {
+			return s(d, d.counts[0] + d.counts[1]);
+		  })
+          .attr('width', 10)
+          .style('fill', '#0f0');
+        
+        // add in the paths now
+		// var i to var j
+		cor.append('path')
+		  .attr('d', function(d) {
+			var path = "M 570 0"; // move to start (have 280px to work with)
+			path += " l -280 0";    // line to var j top
+			path += " l 0 " + s(d, d.counts[3]);
+			path += " l -280 0";
+			path += " l 0 -" + s(d, d.counts[3]);
+
+			return path;			
+		  })
+		  .style('fill', 'rgb(255, 0, 0)');
+       
+		// var i to modal j
+		var crossAngle = Math.PI / 5; // the angle at which to cross
+		var rdLen = 20;               // the length of the rounded corners
+		
+		cor.append('path')
+		  .attr('d', function(d) {
+			var path = "M 290 " + s(d, d.counts[3]);
+			//path += " l -70 0"; // move 50px to lead curve (plus rdLen to account for returning curve... 
+			                    //                          otherwise it pinches)
+		
+			var ctrlPtDrop = rdLen * Math.sin(crossAngle);
+			var ctrlPtLead = rdLen * Math.cos(crossAngle);
+
+			var transDrop = s(d, d.counts[1]) - 2 * ctrlPtDrop;
+			var transLead = transDrop / Math.tan(crossAngle);
+
+			var lead = (300 - (4 * rdLen + 2 * ctrlPtLead + transLead)) / 2;
+
+			path += " l -" + (lead + rdLen) + " 0";
+
+			path += " q -" + rdLen + " 0 -" + (ctrlPtLead + rdLen) + " " + ctrlPtDrop;
+			
+			path += " l -" + transLead + " " + transDrop;
+
+			path += " q -" + ctrlPtLead + " " + ctrlPtDrop + " -" + (ctrlPtLead + rdLen) + " " + ctrlPtDrop;
+			path += " l -" + lead + " 0"; 
+
+			// now turn around and go back
+			path += " l 0 " + s(d, d.counts[2]);
+			path += " l " + (lead + rdLen) + " 0";
+
+			path += " q " + rdLen + " 0 " + (ctrlPtLead + rdLen) + " -" + ctrlPtDrop;
+			path += " l " + transLead + " -" + transDrop;
+			path += " q " + ctrlPtLead + " -" + ctrlPtDrop + " " + (ctrlPtLead + rdLen) + " -" + ctrlPtDrop;
+
+			path += " l " + lead + " 0";
+			path += " l 0 -" + s(d, d.counts[2]);
+
+			return path;
+		  })
+		  .style('fill', 'none')
+		  .style('stroke', '#f00');
+
+        
+        /*
+        cor.append('path')
+          .style('fill', '#f00')
+          .attr('d', function(d) {
+            
+          });
+        */
           
         // EXIT STEP
         jpos.exit()
