@@ -404,6 +404,45 @@ var detailView = d3.select("#d3canvas")
   .append('g')
     .attr('class', 'detail')
     .attr('transform', 'translate(30, 150)');
+    
+// define red/green linear gradients
+var gradient = d3.select('#d3canvas').append('defs')
+  .append('linearGradient')
+    .attr('id', 'varToModal')
+    .attr('x1', '0%')
+    .attr('y1', '0%')
+    .attr('x2', '100%')
+    .attr('y2', '0%')
+    .attr('spreadMethod', 'pad');
+    
+gradient.append('stop')
+  .attr('offset', '0%')
+  .attr('stop-color', 'rgb(255,0,0)')
+  .attr('stop-opacity', 1);
+
+gradient.append('stop')
+  .attr('offset', '100%')
+  .attr('stop-color', 'rgb(0,255,0)')
+  .attr('stop-opacity', 1);
+  
+gradient = d3.select('#d3canvas').append('defs')
+  .append('linearGradient')
+    .attr('id', 'modalToVar')
+    .attr('x1', '0%')
+    .attr('y1', '0%')
+    .attr('x2', '100%')
+    .attr('y2', '0%')
+    .attr('spreadMethod', 'pad');
+    
+gradient.append('stop')
+  .attr('offset', '0%')
+  .attr('stop-color', 'rgb(0,255,0)')
+  .attr('stop-opacity', 1);
+
+gradient.append('stop')
+  .attr('offset', '100%')
+  .attr('stop-color', 'rgb(255,0,0)')
+  .attr('stop-opacity', 1);
       
 var x = d3.scale.ordinal()
   .rangeBands([0, 940], 0.1);
@@ -529,56 +568,15 @@ var updateVis = function() {
           return detailScales[curData.posi + "," + curData.posj](counts);
         };
 
-
-        cor.append('rect')
-          .attr('x', 0)
-          .attr('y', 0)
-          .attr('height', function(d) {
-            detailScales[d.posi + "," + d.posj] = d3.scale.linear()
-              .domain([0, d.depth])
-              .range([0, y.rangeBand()]);
-
-            return s(d, d.counts[1] + d.counts[3]);
-          })
-          .attr('width', 10)
-          .style('fill', '#f00');
-          
-        cor.append('rect')
-          .attr('x', 0)
-          .attr('y', function(d) {
-            return s(d, d.counts[1] + d.counts[3]);
-          })
-          .attr('height', function(d) {
-            return s(d, d.counts[0] + d.counts[2]);
-          })
-          .attr('width', 10)
-          .style('fill', '#0f0');
-        
-
-        cor.append('rect')
-          .attr('x', 290)
-          .attr('y', 0)
-          .attr('height', function(d) {
-            return s(d, d.counts[2] + d.counts[3]);
-          })
-          .attr('width', 10)
-          .style('fill', '#f00');
-          
-        cor.append('rect')
-          .attr('x', 290)
-          .attr('y', function(d) {
-            return s(d, d.counts[2] + d.counts[3]);
-          })
-          .attr('height', function(d) {
-            return s(d, d.counts[0] + d.counts[1]);
-          })
-          .attr('width', 10)
-          .style('fill', '#0f0');
         
         // add in the paths now
         // var i to var j
         cor.append('path')
           .attr('d', function(d) {
+            detailScales[d.posi + "," + d.posj] = d3.scale.linear()
+              .domain([0, d.depth])
+              .range([0, y.rangeBand()]);
+          
             var path = "M 570 0"; // move to start (have 280px to work with)
             path += " l -280 0";    // line to var j top
             path += " l 0 " + s(d, d.counts[3]);
@@ -588,6 +586,20 @@ var updateVis = function() {
             return path;            
           })
           .style('fill', 'rgb(255, 0, 0)');
+          
+        // modal i to modal j
+        cor.append('path')
+          .attr('d', function(d) { 
+            var path = "M 290 " + s(d, d.counts[2] + d.counts[3] + d.counts[1]);
+            path += " l -280 0";
+            path += " l 0 " + s(d, d.counts[0]);
+            path += " l 280 0"; 
+            path += " l 0 -" + s(d, d.counts[0]);
+            
+            return path;
+          })
+          .style('fill', 'rgb(0, 255, 0)')
+          .style('stroke', '#000');
        
         // var i to modal j
         var crossAngle = Math.PI / 4; // the angle at which to cross
@@ -670,23 +682,57 @@ var updateVis = function() {
           .attr('d', function(d) {
             return makeTransitionPath(d, true);
           })
-          .style('fill', '#f00')
+          .style('fill', 'url(#modalToVar)')
           .style('stroke', '#000');
 
         cor.append('path')
           .attr('d', function(d) {
             return makeTransitionPath(d, false);
           })
-          .style('fill', '#0f0')
+          .style('fill', 'url(#varToModal)')
           .style('stroke', '#000');
+          
         
-        /*
-        cor.append('path')
-          .style('fill', '#f00')
-          .attr('d', function(d) {
-            
-          });
-        */
+        cor.append('rect')
+          .attr('x', 0)
+          .attr('y', 0)
+          .attr('height', function(d) {
+            return s(d, d.counts[1] + d.counts[3]);
+          })
+          .attr('width', 12)
+          .style('fill', '#f00');
+          
+        cor.append('rect')
+          .attr('x', 0)
+          .attr('y', function(d) {
+            return s(d, d.counts[1] + d.counts[3]);
+          })
+          .attr('height', function(d) {
+            return s(d, d.counts[0] + d.counts[2]);
+          })
+          .attr('width', 12)
+          .style('fill', '#0f0');
+        
+
+        cor.append('rect')
+          .attr('x', 288)
+          .attr('y', 0)
+          .attr('height', function(d) {
+            return s(d, d.counts[2] + d.counts[3]);
+          })
+          .attr('width', 12)
+          .style('fill', '#f00');
+          
+        cor.append('rect')
+          .attr('x', 288)
+          .attr('y', function(d) {
+            return s(d, d.counts[2] + d.counts[3]);
+          })
+          .attr('height', function(d) {
+            return s(d, d.counts[0] + d.counts[1]);
+          })
+          .attr('width', 12)
+          .style('fill', '#0f0');
           
         // EXIT STEP
         jpos.exit()
