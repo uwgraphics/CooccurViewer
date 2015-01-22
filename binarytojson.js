@@ -673,8 +673,10 @@ var updateVis = function() {
           }
           
           var startX = xDir == 1 ? 10 : 290;
+          var startY = yDir == -1 ? 0 : 
+            xDir == -1 ? s(d, ami(d) + avi(d)) + gap : s(d, amj(d) + avj(d)) + gap;
           
-          var path = "M " + startX + " 0";
+          var path = "M " + startX + " " + startY;
           path += " q " + (xDir * len) + " 0 " + (xDir * (len + len * Math.cos(exitAngle))) + " " + (yDir * len * Math.sin(exitAngle));
           
           path += " l " + (xDir * s(d,n) * Math.cos(Math.PI / 2 - exitAngle)) + " " + ((-yDir) * s(d,n) * Math.sin(Math.PI / 2 - exitAngle));
@@ -687,32 +689,30 @@ var updateVis = function() {
           return path;          
         };
         
+        // handle read exits (those reads that don't appear in the other position)
         cor.append('path')
           .attr('d', function(d) {
             return calcLeaving(d, 'vi');
-            /*
-            //var n = w(d, true, true) - (d.counts[2] + d.counts[3]); // num not represented
-            //var path = "M 290 0 l -140 -50 l 0 " + s(d, n) + " l 140 50 l 0 -" + s(d, n);
-            
-            var n = avi(d) - vi(d);
-            var path = "M 290 0";
-            path += " q -" + len + " 0 -" + (len + len * Math.cos(exitAngle)) + " -" + (len * Math.sin(exitAngle));
-            
-            path += " l -" + s(d,n) * Math.cos(Math.PI / 2 - exitAngle) + " " + s(d,n) * Math.sin(Math.PI / 2 - exitAngle);
-            
-            var t = s(d,n) * Math.cos(Math.PI / 2 - exitAngle) + len + len * Math.cos(exitAngle);
-            t = t / (1 + Math.cos(exitAngle));
-            
-            path += " q " + (t * Math.cos(exitAngle)) + " " + (t * Math.sin(exitAngle)) + " " + (t * Math.cos(exitAngle) + t) + " " + (t * Math.sin(exitAngle));
-            
-            //path += " q " + (75 * Math.cos(exitAngle)) + " " + (s(d,n) + 75 * Math.sin(exitAngle)) + " " + (75 + 75 * Math.cos(exitAngle)) + " " + (s(d,n) + 75 * Math.sin(exitAngle));
-            //path += " Q " + (280-50) + " " + s(d,n) + " 290 " + s(d,n);
-            
-            //path += " l 0 -" + s(d,n);
-            
-            return path;*/
           })
-          .style('fill', 'rgb(128,128,128)');
+          .style('fill', 'rgba(128,128,128,0.5)');
+          
+        cor.append('path')
+          .attr('d', function(d) { 
+            return calcLeaving(d, 'mi');
+          })
+          .style('fill', 'rgba(128,128,128,0.5)');
+          
+        cor.append('path')
+          .attr('d', function(d) { 
+            return calcLeaving(d, 'vj');
+          })
+          .style('fill', 'rgba(128,128,128,0.5)');
+        
+        cor.append('path')
+          .attr('d', function(d) { 
+            return calcLeaving(d, 'mj');
+          })
+          .style('fill', 'rgba(128,128,128,0.5)');
 
         // handle var_i -> var_j
         cor.append('path')
