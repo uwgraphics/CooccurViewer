@@ -279,6 +279,10 @@ var filterData = function() {
     theJs.forEach(function(j) {
       var curVal = metrics[i][j];
       
+      // heuristic: remove self co-occurrences
+      if (i == j)
+        return;
+      
       // check for minimum depth; quit if fails
       var minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
       if (!curVal.hasOwnProperty('depth') || curVal.depth < minDepth)
@@ -347,7 +351,13 @@ var checkFilterEntry = function(i, j) {
   
   console.log("---- comparison pos %d to %d", +i, +j);
   
-   // check for minimum depth; quit if fails
+  // check for self co-occurrences
+  if (i == j) {
+    console.warn("position (%d,%d) is a self co-occurrence; removed.", i, j);
+    return;
+  }
+    
+  // check for minimum depth; quit if fails
   var minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
   if (!curVal.hasOwnProperty('depth') || curVal.depth < minDepth) {
     console.warn("position (%d, %d) failed depth check: wanted %f% of %d (%d), found %d (%s%)",
@@ -403,7 +413,7 @@ var overview = d3.select("#d3canvas")
 var detailView = d3.select("#d3canvas")
   .append('g')
     .attr('class', 'detail')
-    .attr('transform', 'translate(30, 150)');
+    .attr('transform', 'translate(30, 170)');
     
 // define red/green linear gradients
 var gradient = d3.select('#d3canvas').append('defs')
@@ -448,7 +458,7 @@ var x = d3.scale.ordinal()
   .rangeBands([0, 940], 0.1);
   
 var y = d3.scale.ordinal()
-  .rangeBands([0, 620], 0.1);
+  .rangeBands([0, 600], 0.1);
   
 var miniBarY = d3.scale.ordinal()
   .domain(['depth', 'variant', 'metric'])
@@ -471,6 +481,7 @@ var metricColorScale = d3.scale.quantize()
   .range(colorbrewer.RdBu[9]);
 
 var detailScales = {};
+var detailData = [];
     
 var updateVis = function() { 
   // do the brain-dead thing and just wipe everything
@@ -498,17 +509,86 @@ var updateVis = function() {
         return 'translate(' + x(d.pos) + ',0)';
       })
       .on('click', function(datum, i) {
+        detailData = filtered[i].relatedPairs;
+        updateDetail();
+      });
+      
+  var barHeight = 20;
+      
+  /*
+  newPos.append('rect')
+    .attr('width', x.rangeBand())
+    .attr('height', barHeight)
+    .style('fill', '#f00');*/
+  
+  newPos.append('rect')
+    .attr('class', 'depth')
+    .attr('x', 0)
+    .attr('y', miniBarY('depth'))
+    .attr('height', miniBarY.rangeBand())
+    .attr('width', x.rangeBand())
+    .style('fill', function(d) {
+      return depthScale(d3.max(d.relatedPairs, function(e) { return e.depth; }));
+    });
+    
+  newPos.append('rect')
+    .attr('class', 'variant')
+    .attr('x', 0)
+    .attr('y', miniBarY('variant'))
+    .attr('height', miniBarY.rangeBand())
+    .attr('width', x.rangeBand())
+    .style('fill', function(d) {
+      var imax = d3.max(d.relatedPairs, function(e) {
+        return (e.counts[2] + e.counts[3]) / e.depth;
+      });
+      
+      var jmax = d3.max(d.relatedPairs, function(e) {
+        return (e.counts[1] + e.counts[3]) / e.depth;
+      });
+      
+      return variantScale(Math.max(imax, jmax));
+    });
+    
+  newPos.append('rect')
+    .attr('class', 'metric')
+    .attr('x', 0)
+    .attr('y', miniBarY('metric'))
+    .attr('height', miniBarY.rangeBand())
+    .attr('width', x.rangeBand())
+    .style('fill', function(d) {
+      return metricScale(
+        d3.max(d.relatedPairs, function(e) { 
+          return Math.abs(e.metric); 
+        })
+      );
+    });
+    
+  newPos.append('text')
+    .attr('class', 'labelpos')
+    .attr('x', x.rangeBand() / 2)
+    .attr('y', miniBarHeight + 15)
+    .text(function(d) { return d.pos; });
+  
+  // ENTER + UPDATE STEP
+  
+  
+  // EXIT STEP
+  
+  
+};
+
+var updateDetail = function() {
         var jpos = detailView.selectAll('g.jpos')
-          .data(filtered[i].relatedPairs, function(d) { return d.posi + "," + d.posj }); 
+          .data(detailData, function(d) { return d.posi + "," + d.posj }); 
           
-        y.domain(filtered[i].relatedPairs.map(function(d) { return d.posj; }));
+        y.domain(detailData.map(function(d) { return d.posj; }));
           
         // ENTER STEP
         var newJpos = jpos.enter()
           .append('g')
             .attr('class', 'jpos')
             .attr('transform', function(d) {
-              return 'translate(' + x(datum.pos) + ',' + y(d.posj) + ')';
+              return 'translate(620,' + y(d.posj) + ')';
             });
             
         newJpos.append('rect')
@@ -786,70 +866,6 @@ var updateVis = function() {
             .attr('y', 70)
             .style('fill-opacity', 1e-6)
             .remove();
-      });
-      
-  var barHeight = 20;
-      
-  /*
-  newPos.append('rect')
-    .attr('width', x.rangeBand())
-    .attr('height', barHeight)
-    .style('fill', '#f00');*/
-  
-  newPos.append('rect')
-    .attr('class', 'depth')
-    .attr('x', 0)
-    .attr('y', miniBarY('depth'))
-    .attr('height', miniBarY.rangeBand())
-    .attr('width', x.rangeBand())
-    .style('fill', function(d) {
-      return depthScale(d3.max(d.relatedPairs, function(e) { return e.depth; }));
-    });
-    
-  newPos.append('rect')
-    .attr('class', 'variant')
-    .attr('x', 0)
-    .attr('y', miniBarY('variant'))
-    .attr('height', miniBarY.rangeBand())
-    .attr('width', x.rangeBand())
-    .style('fill', function(d) {
-      var imax = d3.max(d.relatedPairs, function(e) {
-        return (e.counts[2] + e.counts[3]) / e.depth;
-      });
-      
-      var jmax = d3.max(d.relatedPairs, function(e) {
-        return (e.counts[1] + e.counts[3]) / e.depth;
-      });
-      
-      return variantScale(Math.max(imax, jmax));
-    });
-    
-  newPos.append('rect')
-    .attr('class', 'metric')
-    .attr('x', 0)
-    .attr('y', miniBarY('metric'))
-    .attr('height', miniBarY.rangeBand())
-    .attr('width', x.rangeBand())
-    .style('fill', function(d) {
-      return metricScale(
-        d3.max(d.relatedPairs, function(e) { 
-          return Math.abs(e.metric); 
-        })
-      );
-    });
-    
-  newPos.append('text')
-    .attr('class', 'labelpos')
-    .attr('x', x.rangeBand() / 2)
-    .attr('y', miniBarHeight + 15)
-    .text(function(d) { return d.pos; });
-  
-  // ENTER + UPDATE STEP
-  
-  
-  // EXIT STEP
-  
-  
 };
 
 $(document).ready(function() {
