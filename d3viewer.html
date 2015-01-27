@@ -64,7 +64,7 @@
             <svg id="d3canvas" version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
     </div>
-    <div class="row">
+    <div class="row" id="d3-sliders">
         <div class="col-sm-4" id="depth-slider">
             <label for="threshold-depth">
                 Read Depth threshold: 
@@ -79,7 +79,7 @@
         </div>
         <div class="col-sm-4" id="metric-slider">
             <label for="threshold-metric">
-                Co-occurrence metric threshold: 
+                Co-occurrence threshold: 
             </label>
             <input id="threshold-metric" type="text" data-slider-min="0" data-slider-max="1" data-slider-step="0.02" data-slider-value="0.3" />
         </div>

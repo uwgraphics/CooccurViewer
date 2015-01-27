@@ -457,8 +457,9 @@ gradient.append('stop')
 var x = d3.scale.ordinal()
   .rangeBands([0, 940], 0.1);
   
-var y = d3.scale.ordinal()
-  .rangeBands([0, 600], 0.1);
+var y = d3.scale.ordinal()  // only show two entries
+  .range([50,350]);
+y.rangeBand = function() { return 200; }; // hack to keep d3 paradigm
   
 var miniBarY = d3.scale.ordinal()
   .domain(['depth', 'variant', 'metric'])
@@ -577,295 +578,370 @@ var updateVis = function() {
   
 };
 
+var curDetail = [];
+var curPage = 0;
+
+var detailWidth = 300;
 var updateDetail = function() {
-        var jpos = detailView.selectAll('g.jpos')
-          .data(detailData, function(d) { return d.posi + "," + d.posj }); 
-          
-        y.domain(detailData.map(function(d) { return d.posj; }));
-          
-        // ENTER STEP
-        var newJpos = jpos.enter()
-          .append('g')
-            .attr('class', 'jpos')
-            .attr('transform', function(d) {
-              return 'translate(620,' + y(d.posj) + ')';
-            });
-            
-        newJpos.append('rect')
-          .attr('height', y.rangeBand())
-          .attr('width', x.rangeBand())
-          .attr('x', 0)
-          .attr('y', 0)
-          .style('fill', function(d) { return metricColorScale(d.metric); })
-          .on('click', function(d) {
-            checkFilterEntry(d.posi, d.posj);
-          });
-          
-        var newDetail = newJpos.append('g')
-          .attr('class', 'detail')
-          .attr('transform',
-            'translate(' + (x.rangeBand() + 3) + "," + (y.rangeBand() / 2 - 30) + ')'
-          );
-          
-        newDetail.append('text')
-          .text(function(d) { return "Position: " + d.posi + ", " + d.posj; });
-          
-        newDetail.append('text')
-          .attr('y', 15)
-          .text(function(d) {
-            var varPer = (d.counts[2] + d.counts[3]) / d.depth * 100;
-            return "Variant % at " + d.posi + ": " + varPer.toFixed(2) + "%";
-          });
-          
-        newDetail.append('text')
-          .attr('y', 30)
-          .text(function(d) {
-            var varPer = (d.counts[1] + d.counts[3]) / d.depth * 100;
-            return "Variant % at " + d.posj + ": " + varPer.toFixed(2) + "%";
-          });
-          
-        newDetail.append('text')
-          .attr('y', 45)
-          .text(function(d) {
-            return d.depth + " reads span these two locations";
-          });
-          
-        newDetail.append('text')
-          .attr('y', 60)
-          .text(function(d) {
-            return "Metric: " + d.metric.toFixed(3);
-          });
-          
-        // handle making the correlation curves
-        var cor = newJpos.append('g')
-          .attr('class', 'correlation')
-          .attr('transform', 'translate(-300, 0)')
-          .attr('width', '300');
-       
-        // initialize the detail scales and 
-        // draw two blocks
-        var s = function(curData, counts) { 
-          return detailScales[curData.posi + "," + curData.posj](counts);
-        };
+  curDetail = detailData.slice(0, 2);
+
+  var jpos = detailView.selectAll('g.jpos')
+    .data(curDetail, function(d) { return d.posi + "," + d.posj }); 
+    
+  y.domain(curDetail.map(function(d) { return d.posj; }));
+    
+  // ENTER STEP
+  var newJpos = jpos.enter()
+    .append('g')
+      .attr('class', 'jpos')
+      .attr('transform', function(d) {
+        return 'translate(' + ((940 / 2) - (detailWidth / 2)) + ',' + y(d.posj) + ')';
+      });
+    
+  var newDetail = newJpos.append('g')
+    .attr('class', 'detail')
+    .attr('transform',
+      'translate(' + (detailWidth + x.rangeBand() + 3) + "," + (y.rangeBand() / 2 - 30) + ')'
+    );
+    
+  newDetail.append('rect')
+    .attr('height', 15)
+    .attr('width', 15)
+    .attr('x', 0)
+    .attr('y', -12)
+    .style('fill', function(d) { return metricColorScale(d.metric); })
+    .on('click', function(d) {
+      checkFilterEntry(d.posi, d.posj);
+    });
+    
+    
+  newDetail.append('text')
+    .attr('x', 20)
+    .attr('y', 0)
+    .text(function(d) { return d.metric.toFixed(3) + ": correlation between " + d.posi + " and " + d.posj; });
+  
+  newDetail.append('rect')
+    .attr('x', 0)
+    .attr('y', 8)
+    .attr('height', 15)
+    .attr('width', 15)
+    .style('fill', function(d) { return depthScale(d.depth); });
+    
+  newDetail.append('text')
+    .attr('x', 20)
+    .attr('y', 20)
+    .text(function(d) { return (d.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2) + "% of max depth"; });
+    
+  newDetail.append('text')
+    .attr('x', 40)
+    .attr('y', 35)
+    .text(function(d) {
+      return "(" + d.depth + " / " + metrics['bounds']['depth']['max'] + " max)";
+    });
+    
+  newDetail.append('rect')
+    .attr('x', 0)
+    .attr('y', 43)
+    .attr('height', 15)
+    .attr('width', 15)
+    .style('fill', function(d) { 
+      return variantScale((d.counts[2] + d.counts[3]) / d.depth);
+    });
+    
+  newDetail.append('text')
+    .attr('x', 20)
+    .attr('y', 55)
+    .text(function(d) { 
+      return "Variants at " + d.posi + ": " + ((d.counts[2] + d.counts[3]) / d.depth * 100).toFixed(1) + "%"; 
+    });
+    
+  newDetail.append('rect')
+    .attr('x', 0)
+    .attr('y', 63)
+    .attr('height', 15)
+    .attr('width', 15)
+    .style('fill', function(d) { 
+      return variantScale((d.counts[1] + d.counts[3]) / d.depth);
+    });
+    
+  newDetail.append('text')
+    .attr('x', 20)
+    .attr('y', 75)
+    .text(function(d) {
+      return "Variants at " + d.posj + ": " + ((d.counts[1] + d.counts[3]) / d.depth * 100).toFixed(1) + "%";
+    });
+    
+  /*
+  newDetail.append('text')
+    .attr('y', 15)
+    .text(function(d) {
+      var varPer = (d.counts[2] + d.counts[3]) / d.depth * 100;
+      return "Variant % at " + d.posi + ": " + varPer.toFixed(2) + "%";
+    });
+    
+  newDetail.append('text')
+    .attr('y', 30)
+    .text(function(d) {
+      var varPer = (d.counts[1] + d.counts[3]) / d.depth * 100;
+      return "Variant % at " + d.posj + ": " + varPer.toFixed(2) + "%";
+    });
+    
+  newDetail.append('text')
+    .attr('y', 45)
+    .text(function(d) {
+      return d.depth + " reads span these two locations";
+    });
+    
+  newDetail.append('text')
+    .attr('y', 60)
+    .text(function(d) {
+      return "Metric: " + d.metric.toFixed(3);
+    });
+  */
+    
+  // handle making the correlation curves
+  var cor = newJpos.append('g')
+    .attr('class', 'correlation')
+    .attr('width', '300');
+ 
+  // initialize the detail scales and 
+  // draw two blocks
+  var s = function(curData, counts) { 
+    return detailScales[curData.posi + "," + curData.posj](counts);
+  };
+  
+  var w = function(curData, isVar, isI) {
+    var c = isI ? 
+      metrics[curData.posi][curData.posi].counts : 
+      metrics[curData.posj][curData.posj].counts;
+    
+    return isVar ? c[3] : c[0];
+  };
+
+  // some helper functions
+  var vi = function(curData) { return curData.counts[2] + curData.counts[3]; };
+  var mi = function(curData) { return curData.counts[0] + curData.counts[1]; };
+  var vj = function(curData) { return curData.counts[1] + curData.counts[3]; };
+  var mj = function(curData) { return curData.counts[0] + curData.counts[2]; };
+
+  var avi = function(curData) { return metrics[curData.posi][curData.posi].counts[3]; };
+  var ami = function(curData) { return metrics[curData.posi][curData.posi].counts[0]; };
+  var avj = function(curData) { return metrics[curData.posj][curData.posj].counts[3]; };
+  var amj = function(curData) { return metrics[curData.posj][curData.posj].counts[0]; };
+
+  var vivj = function(curData) { return curData.counts[3]; };
+  var vimj = function(curData) { return curData.counts[2]; };
+  var mivj = function(curData) { return curData.counts[1]; };
+  var mimj = function(curData) { return curData.counts[0]; };
+
+  
+  // add in the paths now
+  // var i to var j
+  
+  // the size of the gap between classes of reads
+  var gap = 25;
+  
+  cor.append('rect')
+    .attr('x', 0)
+    .attr('y', 0)
+    .attr('height', function(d) {
+      var maxDepth = Math.max(
+        metrics[d.posi][d.posi].depth,
+        metrics[d.posj][d.posj].depth
+      );
+    
+      detailScales[d.posi + "," + d.posj] = d3.scale.linear()
+        .domain([0, maxDepth])
+        .range([0, y.rangeBand() - gap]);
         
-        var w = function(curData, isVar, isI) {
-          var c = isI ? 
-            metrics[curData.posi][curData.posi].counts : 
-            metrics[curData.posj][curData.posj].counts;
-          
-          return isVar ? c[3] : c[0];
-        };
+      return s(d, avj(d));
+    })
+    .attr('width', 12)
+    .style('fill', '#f00');
+    
+  cor.append('rect')
+    .attr('x', 0)
+    .attr('y', function(d) {
+      return s(d, avj(d)) + gap;
+    })
+    .attr('height', function(d) {
+      return s(d, amj(d));
+    })
+    .attr('width', 12)
+    .style('fill', '#0f0');
+    
+  cor.append('rect')
+    .attr('x', 288)
+    .attr('y', 0)
+    .attr('height', function(d) {
+      return s(d, avi(d));
+    })
+    .attr('width', 12)
+    .style('fill', '#f00');
+    
+  cor.append('rect')
+    .attr('x', 288)
+    .attr('y', function(d) {
+      return s(d, avi(d)) + gap;
+    })
+    .attr('height', function(d) {
+      return s(d, ami(d));
+    })
+    .attr('width', 12)
+    .style('fill', '#0f0');
+    
+  // append position labels
+  cor.append('text')
+    .attr('x', 6)
+    .attr('y', y.rangeBand() + 20)
+    .style('font-weight', 900)
+    .style('text-anchor', 'middle')
+    .text(function(d) { return d.posj; });  
+    
+  cor.append('text')
+    .attr('x', 294)
+    .attr('y', y.rangeBand() + 20)
+    .style('font-weight', 900)
+    .style('text-anchor', 'middle')
+    .text(function(d) { return d.posi; });
 
-        // some helper functions
-        var vi = function(curData) { return curData.counts[2] + curData.counts[3]; };
-        var mi = function(curData) { return curData.counts[0] + curData.counts[1]; };
-        var vj = function(curData) { return curData.counts[1] + curData.counts[3]; };
-        var mj = function(curData) { return curData.counts[0] + curData.counts[2]; };
+  // handle var_i excess
+  var exitAngle = Math.PI / 4;
+  var len = 50;
+  var calcLeaving = function(d, type) {
+    var xDir, yDir, n, start;
+    switch (type) {
+      case "vi":
+        xDir = -1; yDir = -1;
+        n = avi(d) - vi(d);
+        break;
+      case "vj":
+        xDir = 1; yDir = -1;
+        n = avj(d) - vj(d);
+        break;
+      case "mi":
+        xDir = -1; yDir = 1;
+        n = ami(d) - mi(d);
+        break;
+      case "mj":
+        xDir = 1; yDir = 1;
+        n = amj(d) - mj(d);
+    }
+    
+    var startX = xDir == 1 ? 10 : 290;
+    var startY = yDir == -1 ? 0 : 
+      xDir == -1 ? s(d, ami(d) + avi(d)) + gap : s(d, amj(d) + avj(d)) + gap;
+    
+    var path = "M " + startX + " " + startY;
+    path += " q " + (xDir * len) + " 0 " + (xDir * (len + len * Math.cos(exitAngle))) + " " + (yDir * len * Math.sin(exitAngle));
+    
+    path += " l " + (xDir * s(d,n) * Math.cos(Math.PI / 2 - exitAngle)) + " " + ((-yDir) * s(d,n) * Math.sin(Math.PI / 2 - exitAngle));
+    
+    var t = s(d,n) * Math.cos(Math.PI / 2 - exitAngle) + len + len * Math.cos(exitAngle);
+    t = t / (1 + Math.cos(exitAngle));
+    
+    path += " q " + ((-xDir) * t * Math.cos(exitAngle)) + " " + ((-yDir) * t * Math.sin(exitAngle)) + " " + ((-xDir) * t * Math.cos(exitAngle) + (-xDir) * t) + " " + ((-yDir) * t * Math.sin(exitAngle));
+    
+    return path;          
+  };
+  
+  // handle read exits (those reads that don't appear in the other position)
+  cor.append('path')
+    .attr('d', function(d) {
+      return calcLeaving(d, 'vi');
+    })
+    .style('fill', 'rgba(128,128,128,0.5)');
+    
+  cor.append('path')
+    .attr('d', function(d) { 
+      return calcLeaving(d, 'mi');
+    })
+    .style('fill', 'rgba(128,128,128,0.5)');
+    
+  cor.append('path')
+    .attr('d', function(d) { 
+      return calcLeaving(d, 'vj');
+    })
+    .style('fill', 'rgba(128,128,128,0.5)');
+  
+  cor.append('path')
+    .attr('d', function(d) { 
+      return calcLeaving(d, 'mj');
+    })
+    .style('fill', 'rgba(128,128,128,0.5)');
 
-        var avi = function(curData) { return metrics[curData.posi][curData.posi].counts[3]; };
-        var ami = function(curData) { return metrics[curData.posi][curData.posi].counts[0]; };
-        var avj = function(curData) { return metrics[curData.posj][curData.posj].counts[3]; };
-        var amj = function(curData) { return metrics[curData.posj][curData.posj].counts[0]; };
-     
-        var vivj = function(curData) { return curData.counts[3]; };
-        var vimj = function(curData) { return curData.counts[2]; };
-        var mivj = function(curData) { return curData.counts[1]; };
-        var mimj = function(curData) { return curData.counts[0]; };
+  // handle var_i -> var_j
+  cor.append('path')
+    .attr('d', function(d) {
+      var mi = avi(d) - vi(d);
+      var mj = avj(d) - vj(d);
+      var n = vivj(d);
 
-        
-        // add in the paths now
-        // var i to var j
-        
-        // the size of the gap between classes of reads
-        var gap = 25;
-        
-        cor.append('rect')
-          .attr('x', 0)
-          .attr('y', 0)
-          .attr('height', function(d) {
-            var maxDepth = Math.max(
-              metrics[d.posi][d.posi].depth,
-              metrics[d.posj][d.posj].depth
-            );
-          
-            detailScales[d.posi + "," + d.posj] = d3.scale.linear()
-              .domain([0, maxDepth])
-              .range([0, y.rangeBand() - gap]);
-              
-            return s(d, avj(d));
-          })
-          .attr('width', 12)
-          .style('fill', '#f00');
-          
-        cor.append('rect')
-          .attr('x', 0)
-          .attr('y', function(d) {
-            return s(d, avj(d)) + gap;
-          })
-          .attr('height', function(d) {
-            return s(d, amj(d));
-          })
-          .attr('width', 12)
-          .style('fill', '#0f0');
-        
+      var path = "M 290 " + s(d,mi) + " l -280 " + s(d,mj-mi);
+      path += " l 0 " + s(d,n);
+      path += " l 280 " + -1 * s(d, mj-mi);
+      path += " l 0 -" + s(d,n);
 
-        cor.append('rect')
-          .attr('x', 288)
-          .attr('y', 0)
-          .attr('height', function(d) {
-            return s(d, avi(d));
-          })
-          .attr('width', 12)
-          .style('fill', '#f00');
-          
-        cor.append('rect')
-          .attr('x', 288)
-          .attr('y', function(d) {
-            return s(d, avi(d)) + gap;
-          })
-          .attr('height', function(d) {
-            return s(d, ami(d));
-          })
-          .attr('width', 12)
-          .style('fill', '#0f0');
-
-        // handle var_i excess
-        var exitAngle = Math.PI / 4;
-        var len = 50;
-        var calcLeaving = function(d, type) {
-          var xDir, yDir, n, start;
-          switch (type) {
-            case "vi":
-              xDir = -1; yDir = -1;
-              n = avi(d) - vi(d);
-              break;
-            case "vj":
-              xDir = 1; yDir = -1;
-              n = avj(d) - vj(d);
-              break;
-            case "mi":
-              xDir = -1; yDir = 1;
-              n = ami(d) - mi(d);
-              break;
-            case "mj":
-              xDir = 1; yDir = 1;
-              n = amj(d) - mj(d);
-          }
-          
-          var startX = xDir == 1 ? 10 : 290;
-          var startY = yDir == -1 ? 0 : 
-            xDir == -1 ? s(d, ami(d) + avi(d)) + gap : s(d, amj(d) + avj(d)) + gap;
-          
-          var path = "M " + startX + " " + startY;
-          path += " q " + (xDir * len) + " 0 " + (xDir * (len + len * Math.cos(exitAngle))) + " " + (yDir * len * Math.sin(exitAngle));
-          
-          path += " l " + (xDir * s(d,n) * Math.cos(Math.PI / 2 - exitAngle)) + " " + ((-yDir) * s(d,n) * Math.sin(Math.PI / 2 - exitAngle));
-          
-          var t = s(d,n) * Math.cos(Math.PI / 2 - exitAngle) + len + len * Math.cos(exitAngle);
-          t = t / (1 + Math.cos(exitAngle));
-          
-          path += " q " + ((-xDir) * t * Math.cos(exitAngle)) + " " + ((-yDir) * t * Math.sin(exitAngle)) + " " + ((-xDir) * t * Math.cos(exitAngle) + (-xDir) * t) + " " + ((-yDir) * t * Math.sin(exitAngle));
-          
-          return path;          
-        };
-        
-        // handle read exits (those reads that don't appear in the other position)
-        cor.append('path')
-          .attr('d', function(d) {
-            return calcLeaving(d, 'vi');
-          })
-          .style('fill', 'rgba(128,128,128,0.5)');
-          
-        cor.append('path')
-          .attr('d', function(d) { 
-            return calcLeaving(d, 'mi');
-          })
-          .style('fill', 'rgba(128,128,128,0.5)');
-          
-        cor.append('path')
-          .attr('d', function(d) { 
-            return calcLeaving(d, 'vj');
-          })
-          .style('fill', 'rgba(128,128,128,0.5)');
-        
-        cor.append('path')
-          .attr('d', function(d) { 
-            return calcLeaving(d, 'mj');
-          })
-          .style('fill', 'rgba(128,128,128,0.5)');
-
-        // handle var_i -> var_j
-        cor.append('path')
-          .attr('d', function(d) {
-            var mi = avi(d) - vi(d);
-            var mj = avj(d) - vj(d);
-            var n = vivj(d);
-
-            var path = "M 290 " + s(d,mi) + " l -280 " + s(d,mj-mi);
-            path += " l 0 " + s(d,n);
-            path += " l 280 " + -1 * s(d, mj-mi);
-            path += " l 0 -" + s(d,n);
-
-            return path;
-          })
-          .style('fill', 'rgb(255,0,0)');
-          
-        // handle var_i -> modal_j
-        cor.append('path')
-          .attr('d', function(d) {
-            var iy = avi(d) - vi(d) + vivj(d);
-            var jy = avj(d);
-            var n = vimj(d);
-            
-            var path = "M 290 " + s(d,iy) + " l -280 " + (s(d,jy-iy) + gap);
-            path += " l 0 " + s(d,n);
-            path += " l 280 " + -1 * (s(d,jy-iy) + gap);
-            path += " l 0 -" + s(d,n);
-            
-            return path;
-          })
-          .style('fill', 'url(#modalToVar)');
-          
-        // handle modal_i -> var_j
-        cor.append('path')
-          .attr('d', function(d) {
-            var n = mivj(d);
-            var iy = avi(d) // + gap
-            var jy = avj(d) - n;
-            
-            var path = "M 290 " + (s(d,iy) + gap);
-            path += " L 10 " + s(d,jy);
-            path += " l 0 " + s(d,n);
-            path += " L 290 " + (s(d,iy+n) + gap);
-            path += " l 0 -" + s(d,n);
-            
-            return path;
-          })
-          .style('fill', 'url(#varToModal)');
-          
-        // handle modal_i -> modal_j
-        cor.append('path')
-          .attr('d', function(d) {
-            var n = mimj(d);
-            var iy = avi(d) + mivj(d); // + gap
-            var jy = avj(d) + vimj(d); // + gap
-            
-            var path = "M 290 " + (s(d,iy) + gap);
-            path += " L 10 " + (s(d,jy) + gap);
-            path += " l 0 " + s(d,n);
-            path += " L 290 " + (s(d,iy+n) + gap);
-            path += " l 0 -" + s(d,n);
-            return path;
-          })
-          .style('fill', 'rgb(0,255,0)');
-          
-        // EXIT STEP
-        jpos.exit()
-          .transition()
-            .duration(500)
-            .attr('y', 70)
-            .style('fill-opacity', 1e-6)
-            .remove();
+      return path;
+    })
+    .style('fill', 'rgb(255,0,0)');
+    
+  // handle var_i -> modal_j
+  cor.append('path')
+    .attr('d', function(d) {
+      var iy = avi(d) - vi(d) + vivj(d);
+      var jy = avj(d);
+      var n = vimj(d);
+      
+      var path = "M 290 " + s(d,iy) + " l -280 " + (s(d,jy-iy) + gap);
+      path += " l 0 " + s(d,n);
+      path += " l 280 " + -1 * (s(d,jy-iy) + gap);
+      path += " l 0 -" + s(d,n);
+      
+      return path;
+    })
+    .style('fill', 'url(#modalToVar)');
+    
+  // handle modal_i -> var_j
+  cor.append('path')
+    .attr('d', function(d) {
+      var n = mivj(d);
+      var iy = avi(d) // + gap
+      var jy = avj(d) - n;
+      
+      var path = "M 290 " + (s(d,iy) + gap);
+      path += " L 10 " + s(d,jy);
+      path += " l 0 " + s(d,n);
+      path += " L 290 " + (s(d,iy+n) + gap);
+      path += " l 0 -" + s(d,n);
+      
+      return path;
+    })
+    .style('fill', 'url(#varToModal)');
+    
+  // handle modal_i -> modal_j
+  cor.append('path')
+    .attr('d', function(d) {
+      var n = mimj(d);
+      var iy = avi(d) + mivj(d); // + gap
+      var jy = avj(d) + vimj(d); // + gap
+      
+      var path = "M 290 " + (s(d,iy) + gap);
+      path += " L 10 " + (s(d,jy) + gap);
+      path += " l 0 " + s(d,n);
+      path += " L 290 " + (s(d,iy+n) + gap);
+      path += " l 0 -" + s(d,n);
+      return path;
+    })
+    .style('fill', 'rgb(0,255,0)');
+    
+  // EXIT STEP
+  jpos.exit()
+    .transition()
+      .duration(500)
+      .attr('y', 70)
+      .style('fill-opacity', 1e-6)
+      .remove();
 };
 
 $(document).ready(function() {

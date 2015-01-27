@@ -244,3 +244,28 @@ svg .axis text {
 #d3canvas g.detail text {
 	font-size: 0.85em;
 }
+
+#d3-sliders .slider-selection {
+	display: none;
+}
+
+#d3-sliders .slider-handle {
+	margin-left: -1px;
+	width: 2px;
+	border-radius: 0;
+}
+
+#depth-slider .slider-track  {
+	background: #f5f5f5 url('img/depth-bg.png') repeat-y left top;
+	background-size: 102%; /* stretch because source image is 98px instead of 100px */
+}
+
+#variant-slider .slider-track  {
+	background: #f5f5f5 url('img/variant-bg.png') repeat-y left top;
+	background-size: 102%; /* stretch because source image is 98px instead of 100px */
+}
+
+#metric-slider .slider-track  {
+	background: #f5f5f5 url('img/metric-bg.png') repeat-y left top;
+	background-size: 102%; /* stretch because source image is 98px instead of 100px */
+}
