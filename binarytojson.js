@@ -417,6 +417,10 @@ var overview = d3.select("#d3canvas")
     .attr('class', 'overview')
     .attr('transform', 'translate(30, 25)');
     
+// add a tip div
+var tip = d3.tip().attr('class', 'd3-tip').html(function(d) { return d.pos; });
+overview.call(tip);
+    
 var detailView = d3.select("#d3canvas")
   .append('g')
     .attr('class', 'detail')
@@ -519,7 +523,9 @@ var updateVis = function() {
       .on('click', function(datum, i) {
         detailData = filtered[i].relatedPairs;
         updateDetail();
-      });
+      })
+      .on('mouseover', tip.show)
+      .on('mouseout', tip.hide);
       
   var barHeight = 20;
       
@@ -670,12 +676,63 @@ var curDetail = [];
 var curPage = 0;
 
 var detailWidth = 300;
-var updateDetail = function() {
-  curDetail = detailData.slice(0, 2);
+var pageSize = 2; // number of detail items to show per page
+var updateDetail = function(page) {
+  page = page || 0;
+  if (page > (detailData.length / pageSize) - 1)
+    page = Math.ceil(detailData.length / pageSize) - 1;
+  if (page < 0)
+    page = 0;
+
+  curDetail = detailData.slice(page * pageSize, page * pageSize + pageSize);
 
   var jpos = detailView.selectAll('g.jpos')
     .data(curDetail, function(d) { return d.posi + "," + d.posj }); 
     
+  // handle pagination of detail views (and remove old div)
+  d3.selectAll('g.pagin').remove();
+  var newPagin = detailView.append('g')
+    .attr('class', 'pagin')
+    .attr('transform', 'translate(0,20)');
+    
+  newPagin.append('text')
+    .text(function() {
+      var numFound = detailData.length;
+      var plurality = numFound == 1 ? " correspondence" : " correspondences";
+      
+      return "Found " + numFound + plurality + " for " + curDetail[0].posi;
+    });
+    
+  newPagin.append('text')
+    .attr('x', 0)
+    .attr('y', 15)
+    .text("Showing "+(page*pageSize+1)+"-"+(page*pageSize+curDetail.length)+" of "+detailData.length);
+    
+  newPagin.append('text')
+    .attr('class', 'link')
+    .attr('x', 0)
+    .attr('y', 37)
+    .style('fill', function() {
+      if (page <= 0) return '#000';
+      else return '#00f'; 
+    })
+    .text("<< Prev page")
+    .on('click', function() { updateDetail(page - 1); });
+    
+  newPagin.append('text')
+    .attr('class', 'link')
+    .attr('x', 85)
+    .attr('y', 37)
+    .style('fill', function() {
+      if (page >= Math.ceil(detailData.length / pageSize) - 1) 
+        return '#000';
+      else 
+        return '#00f';
+    })
+    .text('Next page >>')
+    .on('click', function() { updateDetail(page + 1); });
+    
+  // set the domain for the y-scale
   y.domain(curDetail.map(function(d) { return d.posj; }));
     
   // ENTER STEP
@@ -685,7 +742,10 @@ var updateDetail = function() {
       .attr('transform', function(d) {
         return 'translate(' + ((940 / 2) - (detailWidth / 2)) + ',' + y(d.posj) + ')';
       });
-    
+      
+  
+  
+  // display some detailed data explicitly (e.g. thresholded metrics)
   var newDetail = newJpos.append('g')
     .attr('class', 'detail')
     .attr('transform',
