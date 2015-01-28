@@ -578,6 +578,58 @@ var updateVis = function() {
   
 };
 
+// type is one of {'metric', 'depth', 'variants'}
+var makeColorRamp = function(type, parent, value, width, height) {
+  width = width | 50;
+  height = height | 6;
+  
+  var scale;
+  switch (type) {
+    case 'metric':
+      scale = metricColorScale;
+      break;
+    case 'depth':
+      scale = depthScale;
+      break;
+    case 'variants':
+      scale = variantScale;
+      break;
+    default:
+      console.warn("invalid color ramp selection made: %s", type);
+      return;
+  }
+  
+  var domain = scale.domain();
+  var colors = scale.range();
+  
+  var ramp = parent.append('g')
+    .attr('class', 'ramp');
+    
+  var rampX = d3.scale.ordinal().domain(colors).rangeRoundBands([0, width]);
+    
+  colors.forEach(function(d, i) {
+    ramp.append('rect')
+      .attr('x', rampX.rangeBand() * i)
+      .attr('y', 0)
+      .attr('height', height)
+      .attr('width', rampX.rangeBand())
+      .style('fill', d);
+  });
+  
+  var indiScale = d3.scale.linear().domain(domain).range([rampX(colors[0]), rampX(colors[colors.length-1]) + rampX.rangeBand()]);
+  
+  ramp.append('path')
+    .attr('d', 'M ' + indiScale(value) + ' ' + (height + 2) + ' l 5 5 l -10 0 l 5 -5')
+    .style('fill', '#000');
+    
+  ramp.append('rect')
+    .attr('x', indiScale(value) - 7)
+    .attr('y', height + 7)
+    .attr('width', 15)
+    .attr('height', 15)
+    .style('fill', scale(value));
+};
+
 var curDetail = [];
 var curPage = 0;
 
@@ -670,34 +722,6 @@ var updateDetail = function() {
     .text(function(d) {
       return "Variants at " + d.posj + ": " + ((d.counts[1] + d.counts[3]) / d.depth * 100).toFixed(1) + "%";
     });
-    
-  /*
-  newDetail.append('text')
-    .attr('y', 15)
-    .text(function(d) {
-      var varPer = (d.counts[2] + d.counts[3]) / d.depth * 100;
-      return "Variant % at " + d.posi + ": " + varPer.toFixed(2) + "%";
-    });
-    
-  newDetail.append('text')
-    .attr('y', 30)
-    .text(function(d) {
-      var varPer = (d.counts[1] + d.counts[3]) / d.depth * 100;
-      return "Variant % at " + d.posj + ": " + varPer.toFixed(2) + "%";
-    });
-    
-  newDetail.append('text')
-    .attr('y', 45)
-    .text(function(d) {
-      return d.depth + " reads span these two locations";
-    });
-    
-  newDetail.append('text')
-    .attr('y', 60)
-    .text(function(d) {
-      return "Metric: " + d.metric.toFixed(3);
-    });
-  */
     
   // handle making the correlation curves
   var cor = newJpos.append('g')
