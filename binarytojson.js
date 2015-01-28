@@ -401,14 +401,21 @@ var checkFilterEntry = function(i, j) {
   return true;
 };
 
-var canvas = d3.select("#d3canvas")
-  .append('g')
-    .attr('transform', 'translate(30, 30)');
+// add a line to separate overview from detail
+d3.select('#d3canvas')
+  .append('line')
+    .attr('x1', 0)
+    .attr('y1', 165)
+    .attr('x2', 1000)
+    .attr('y2', 165)
+    .attr('stroke', '#000')
+    .attr('stroke-width', 1)
+    .attr('shape-rendering', 'crispEdges');
     
 var overview = d3.select("#d3canvas")
   .append('g')
     .attr('class', 'overview')
-    .attr('transform', 'translate(30, 30)');
+    .attr('transform', 'translate(30, 25)');
     
 var detailView = d3.select("#d3canvas")
   .append('g')
@@ -579,10 +586,11 @@ var updateVis = function() {
 };
 
 // type is one of {'metric', 'depth', 'variants'}
-var makeColorRamp = function(type, parent, value, width, height) {
+var makeColorRamp = function(type, parent, i, label, width, height) {
   width = width | 50;
   height = height | 6;
   
+  var calcVar;
   var scale;
   switch (type) {
     case 'metric':
@@ -591,8 +599,17 @@ var makeColorRamp = function(type, parent, value, width, height) {
     case 'depth':
       scale = depthScale;
       break;
-    case 'variants':
+    case 'vari':
       scale = variantScale;
+      calcVar = function(d) {
+        return (d.counts[2] + d.counts[3]) / d.depth;
+      };
+      break;
+    case 'varj':
+      scale = variantScale;
+      calcVar = function(d) {
+        return (d.counts[1] + d.counts[3]) / d.depth;
+      };
       break;
     default:
       console.warn("invalid color ramp selection made: %s", type);
@@ -603,7 +620,8 @@ var makeColorRamp = function(type, parent, value, width, height) {
   var colors = scale.range();
   
   var ramp = parent.append('g')
-    .attr('class', 'ramp');
+    .attr('class', 'ramp')
+    .attr('transform', 'translate(0,' + (i * 35) + ')');
     
   var rampX = d3.scale.ordinal().domain(colors).rangeRoundBands([0, width]);
     
@@ -619,15 +637,33 @@ var makeColorRamp = function(type, parent, value, width, height) {
   var indiScale = d3.scale.linear().domain(domain).range([rampX(colors[0]), rampX(colors[colors.length-1]) + rampX.rangeBand()]);
   
   ramp.append('path')
-    .attr('d', 'M ' + indiScale(value) + ' ' + (height + 2) + ' l 5 5 l -10 0 l 5 -5')
+    .attr('d', function(d) {
+      var startPt = calcVar ? indiScale(calcVar(d)) : indiScale(d[type]);
+      return 'M ' + startPt + ' ' + (height + 2) + ' l 5 5 l -10 0 l 5 -5';
+    })
     .style('fill', '#000');
     
   ramp.append('rect')
-    .attr('x', indiScale(value) - 7)
+    .attr('x', function(d) {
+      if (calcVar)
+        return indiScale(calcVar(d)) - 7;
+      else
+        return indiScale(d[type]) - 7; 
+    })
     .attr('y', height + 7)
     .attr('width', 15)
     .attr('height', 15)
-    .style('fill', scale(value));
+    .style('fill', function(d) {
+      if (calcVar) 
+        return scale(calcVar(d));
+      else
+        return scale(d[type]);
+    });
+    
+  ramp.append('text')
+    .attr('x', 63)
+    .attr('y', 23)
+    .text(label);
 };
 
 var curDetail = [];
@@ -656,70 +692,23 @@ var updateDetail = function() {
       'translate(' + (detailWidth + x.rangeBand() + 3) + "," + (y.rangeBand() / 2 - 30) + ')'
     );
     
-  newDetail.append('rect')
-    .attr('height', 15)
-    .attr('width', 15)
-    .attr('x', 0)
-    .attr('y', -12)
-    .style('fill', function(d) { return metricColorScale(d.metric); })
-    .on('click', function(d) {
-      checkFilterEntry(d.posi, d.posj);
+  makeColorRamp('metric', newDetail, 0,
+    function(d) { 
+      return d.metric.toFixed(3) + ": correlation between " + d.posi + " and " + d.posj;
     });
     
-    
-  newDetail.append('text')
-    .attr('x', 20)
-    .attr('y', 0)
-    .text(function(d) { return d.metric.toFixed(3) + ": correlation between " + d.posi + " and " + d.posj; });
-  
-  newDetail.append('rect')
-    .attr('x', 0)
-    .attr('y', 8)
-    .attr('height', 15)
-    .attr('width', 15)
-    .style('fill', function(d) { return depthScale(d.depth); });
-    
-  newDetail.append('text')
-    .attr('x', 20)
-    .attr('y', 20)
-    .text(function(d) { return (d.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2) + "% of max depth"; });
-    
-  newDetail.append('text')
-    .attr('x', 40)
-    .attr('y', 35)
-    .text(function(d) {
-      return "(" + d.depth + " / " + metrics['bounds']['depth']['max'] + " max)";
+  makeColorRamp('depth', newDetail, 1,
+    function(d) {
+      return (d.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2) + "% of max depth";
     });
     
-  newDetail.append('rect')
-    .attr('x', 0)
-    .attr('y', 43)
-    .attr('height', 15)
-    .attr('width', 15)
-    .style('fill', function(d) { 
-      return variantScale((d.counts[2] + d.counts[3]) / d.depth);
-    });
-    
-  newDetail.append('text')
-    .attr('x', 20)
-    .attr('y', 55)
-    .text(function(d) { 
+  makeColorRamp('vari', newDetail, 2,
+    function(d) {
       return "Variants at " + d.posi + ": " + ((d.counts[2] + d.counts[3]) / d.depth * 100).toFixed(1) + "%"; 
     });
     
-  newDetail.append('rect')
-    .attr('x', 0)
-    .attr('y', 63)
-    .attr('height', 15)
-    .attr('width', 15)
-    .style('fill', function(d) { 
-      return variantScale((d.counts[1] + d.counts[3]) / d.depth);
-    });
-    
-  newDetail.append('text')
-    .attr('x', 20)
-    .attr('y', 75)
-    .text(function(d) {
+  makeColorRamp('varj', newDetail, 3,
+    function(d) {
       return "Variants at " + d.posj + ": " + ((d.counts[1] + d.counts[3]) / d.depth * 100).toFixed(1) + "%";
     });
     
