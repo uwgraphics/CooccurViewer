@@ -245,6 +245,22 @@ svg .axis text {
 	font-size: 0.85em;
 }
 
+#d3canvas .correlation > .poslabel {
+	font-weight: 900;
+	text-anchor: middle;
+}
+
+#d3canvas .multiple > .poslabel {
+	font-weight: 400;
+	text-anchor: middle;
+	font-size: 0.8em;
+}
+
+/* indicate that you can click on stuff */
+#d3canvas .ipos, #d3canvas .multiple, #d3canvas .linkactive {
+	cursor: pointer;
+}
+
 #d3-sliders .slider-selection {
 	display: none;
 }

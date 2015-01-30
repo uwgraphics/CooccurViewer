@@ -709,7 +709,9 @@ var updateDetail = function(page) {
     .text("Showing "+(page*pageSize+1)+"-"+(page*pageSize+curDetail.length)+" of "+detailData.length);
     
   newPagin.append('text')
-    .attr('class', 'link')
+    .attr('class', function() { 
+      return page <= 0 ? 'link' : 'link linkactive'; 
+    })
     .attr('x', 0)
     .attr('y', 37)
     .style('fill', function() {
@@ -720,7 +722,10 @@ var updateDetail = function(page) {
     .on('click', function() { updateDetail(page - 1); });
     
   newPagin.append('text')
-    .attr('class', 'link')
+    .attr('class', function() { 
+      return (page >= Math.ceil(detailData.length / pageSize) - 1) ? 
+        'link' : 'link linkactive';
+    })
     .attr('x', 85)
     .attr('y', 37)
     .style('fill', function() {
@@ -732,6 +737,40 @@ var updateDetail = function(page) {
     .text('Next page >>')
     .on('click', function() { updateDetail(page + 1); });
     
+  var sm = newPagin.append('g')
+    .attr('class', 'sm')
+    .attr('transform', 'translate(0,60)');
+    
+  var multiples = sm.selectAll('g.multiple')
+    .data(detailData, function(d) { return d.posi + "," + d.posj; }).enter()
+    .append('g')
+      .attr('class', 'multiple')
+      .attr('transform', function(d, i) {
+        var x = (i % 3) * 90;
+        var y = Math.floor(i / 3) * 90;
+        
+        return "translate(" + x + "," + y + ")";
+      })
+      .on('click', function(d, i) {
+        // bring that page into view
+        var reqPage = Math.floor(i / pageSize);
+        updateDetail(reqPage);
+      });
+    
+  drawCorrelationDiagram(multiples, 70, 60, 0.05);
+    
+  /*
+  multiples.append('rect')
+    .attr('width', 70)
+    .attr('height', 60)
+    .attr('x', function(d, i) {
+      return (i % 3) * 80;
+    })
+    .attr('y', function(d, i) {
+      return Math.floor(i / 3) * 70;
+    })
+    .style('fill', '#f00');*/
+    
   // set the domain for the y-scale
   y.domain(curDetail.map(function(d) { return d.posj; }));
     
@@ -742,8 +781,6 @@ var updateDetail = function(page) {
       .attr('transform', function(d) {
         return 'translate(' + ((940 / 2) - (detailWidth / 2)) + ',' + y(d.posj) + ')';
       });
-      
-  
   
   // display some detailed data explicitly (e.g. thresholded metrics)
   var newDetail = newJpos.append('g')
@@ -889,17 +926,15 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     
   // append position labels
   parentGrp.append('text')
+    .attr('class', 'poslabel')
     .attr('x', Math.floor(rectW / 2))
     .attr('y', height + 20)
-    .style('font-weight', 900)
-    .style('text-anchor', 'middle')
     .text(function(d) { return d.posj; });  
     
   parentGrp.append('text')
+    .attr('class', 'poslabel')
     .attr('x', width - Math.ceil(rectW / 2))
     .attr('y', height + 20)
-    .style('font-weight', 900)
-    .style('text-anchor', 'middle')
     .text(function(d) { return d.posi; });
 
   // path-specific coordinates
@@ -908,7 +943,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     
   // handle var_i excess
   var exitAngle = Math.PI / 4;
-  var len = 50;
+  var len = areaW * 0.15;
   var calcLeaving = function(d, type) {
     var xDir, yDir, n, start;
     switch (type) {
