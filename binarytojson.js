@@ -675,7 +675,7 @@ var makeColorRamp = function(type, parent, i, label, width, height) {
 var curDetail = [];
 var curPage = 0;
 
-var detailWidth = 300;
+var detailWidth = 350;
 var pageSize = 2; // number of detail items to show per page
 var updateDetail = function(page) {
   page = page || 0;
@@ -776,7 +776,27 @@ var updateDetail = function(page) {
   var cor = newJpos.append('g')
     .attr('class', 'correlation')
     .attr('width', '300');
- 
+  
+  // finally, draw the correlation diagram
+  drawCorrelationDiagram(cor, 300, 200, 0.1);
+  
+  
+  // EXIT STEP
+  jpos.exit()
+    .transition()
+      .duration(500)
+      .attr('y', 70)
+      .style('fill-opacity', 1e-6)
+      .remove();
+};
+
+// given an element to add to (assumes parent has data selected and is in .enter()),
+// and a bounding box of width and height, creates the correlation diagram
+var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth) {
+  width = width || 350;
+  height = height || y.rangeBand();
+  percentRectWidth = percentRectWidth || 0.1;
+
   // initialize the detail scales and 
   // draw two blocks
   var s = function(curData, counts) { 
@@ -812,9 +832,13 @@ var updateDetail = function(page) {
   // var i to var j
   
   // the size of the gap between classes of reads
-  var gap = 25;
+  var gap = height * 0.125;
   
-  cor.append('rect')
+  var overlap = 2;
+  var rectW = width * percentRectWidth + overlap;
+  var areaW = width - 2 * (width * percentRectWidth);
+  
+  parentGrp.append('rect')
     .attr('x', 0)
     .attr('y', 0)
     .attr('height', function(d) {
@@ -825,14 +849,14 @@ var updateDetail = function(page) {
     
       detailScales[d.posi + "," + d.posj] = d3.scale.linear()
         .domain([0, maxDepth])
-        .range([0, y.rangeBand() - gap]);
+        .range([0, height - gap]);
         
       return s(d, avj(d));
     })
-    .attr('width', 12)
+    .attr('width', rectW)
     .style('fill', '#f00');
     
-  cor.append('rect')
+  parentGrp.append('rect')
     .attr('x', 0)
     .attr('y', function(d) {
       return s(d, avj(d)) + gap;
@@ -840,44 +864,48 @@ var updateDetail = function(page) {
     .attr('height', function(d) {
       return s(d, amj(d));
     })
-    .attr('width', 12)
+    .attr('width', rectW)
     .style('fill', '#0f0');
     
-  cor.append('rect')
-    .attr('x', 288)
+  parentGrp.append('rect')
+    .attr('x', width - rectW)
     .attr('y', 0)
     .attr('height', function(d) {
       return s(d, avi(d));
     })
-    .attr('width', 12)
+    .attr('width', rectW)
     .style('fill', '#f00');
     
-  cor.append('rect')
-    .attr('x', 288)
+  parentGrp.append('rect')
+    .attr('x', width - rectW)
     .attr('y', function(d) {
       return s(d, avi(d)) + gap;
     })
     .attr('height', function(d) {
       return s(d, ami(d));
     })
-    .attr('width', 12)
+    .attr('width', rectW)
     .style('fill', '#0f0');
     
   // append position labels
-  cor.append('text')
-    .attr('x', 6)
-    .attr('y', y.rangeBand() + 20)
+  parentGrp.append('text')
+    .attr('x', Math.floor(rectW / 2))
+    .attr('y', height + 20)
     .style('font-weight', 900)
     .style('text-anchor', 'middle')
     .text(function(d) { return d.posj; });  
     
-  cor.append('text')
-    .attr('x', 294)
-    .attr('y', y.rangeBand() + 20)
+  parentGrp.append('text')
+    .attr('x', width - Math.ceil(rectW / 2))
+    .attr('y', height + 20)
     .style('font-weight', 900)
     .style('text-anchor', 'middle')
     .text(function(d) { return d.posi; });
 
+  // path-specific coordinates
+  var leftX = rectW - overlap;
+  var rightX = width - (rectW - overlap);
+    
   // handle var_i excess
   var exitAngle = Math.PI / 4;
   var len = 50;
@@ -901,7 +929,7 @@ var updateDetail = function(page) {
         n = amj(d) - mj(d);
     }
     
-    var startX = xDir == 1 ? 10 : 290;
+    var startX = xDir == 1 ? leftX : rightX;
     var startY = yDir == -1 ? 0 : 
       xDir == -1 ? s(d, ami(d) + avi(d)) + gap : s(d, amj(d) + avj(d)) + gap;
     
@@ -919,40 +947,40 @@ var updateDetail = function(page) {
   };
   
   // handle read exits (those reads that don't appear in the other position)
-  cor.append('path')
+  parentGrp.append('path')
     .attr('d', function(d) {
       return calcLeaving(d, 'vi');
     })
     .style('fill', 'rgba(128,128,128,0.5)');
     
-  cor.append('path')
+  parentGrp.append('path')
     .attr('d', function(d) { 
       return calcLeaving(d, 'mi');
     })
     .style('fill', 'rgba(128,128,128,0.5)');
     
-  cor.append('path')
+  parentGrp.append('path')
     .attr('d', function(d) { 
       return calcLeaving(d, 'vj');
     })
     .style('fill', 'rgba(128,128,128,0.5)');
   
-  cor.append('path')
+  parentGrp.append('path')
     .attr('d', function(d) { 
       return calcLeaving(d, 'mj');
     })
     .style('fill', 'rgba(128,128,128,0.5)');
 
   // handle var_i -> var_j
-  cor.append('path')
+  parentGrp.append('path')
     .attr('d', function(d) {
       var mi = avi(d) - vi(d);
       var mj = avj(d) - vj(d);
       var n = vivj(d);
 
-      var path = "M 290 " + s(d,mi) + " l -280 " + s(d,mj-mi);
+      var path = "M " + rightX + " " + s(d,mi) + " l -" + areaW + " " + s(d,mj-mi);
       path += " l 0 " + s(d,n);
-      path += " l 280 " + -1 * s(d, mj-mi);
+      path += " l " + areaW + " " + -1 * s(d, mj-mi);
       path += " l 0 -" + s(d,n);
 
       return path;
@@ -960,15 +988,15 @@ var updateDetail = function(page) {
     .style('fill', 'rgb(255,0,0)');
     
   // handle var_i -> modal_j
-  cor.append('path')
+  parentGrp.append('path')
     .attr('d', function(d) {
       var iy = avi(d) - vi(d) + vivj(d);
       var jy = avj(d);
       var n = vimj(d);
       
-      var path = "M 290 " + s(d,iy) + " l -280 " + (s(d,jy-iy) + gap);
+      var path = "M " + rightX + " " + s(d,iy) + " l -" + areaW + " " + (s(d,jy-iy) + gap);
       path += " l 0 " + s(d,n);
-      path += " l 280 " + -1 * (s(d,jy-iy) + gap);
+      path += " l " + areaW + " " + -1 * (s(d,jy-iy) + gap);
       path += " l 0 -" + s(d,n);
       
       return path;
@@ -976,16 +1004,16 @@ var updateDetail = function(page) {
     .style('fill', 'url(#modalToVar)');
     
   // handle modal_i -> var_j
-  cor.append('path')
+  parentGrp.append('path')
     .attr('d', function(d) {
       var n = mivj(d);
       var iy = avi(d) // + gap
       var jy = avj(d) - n;
       
-      var path = "M 290 " + (s(d,iy) + gap);
-      path += " L 10 " + s(d,jy);
+      var path = "M " + rightX + " " + (s(d,iy) + gap);
+      path += " L " + leftX + " " + s(d,jy);
       path += " l 0 " + s(d,n);
-      path += " L 290 " + (s(d,iy+n) + gap);
+      path += " L " + rightX + " " + (s(d,iy+n) + gap);
       path += " l 0 -" + s(d,n);
       
       return path;
@@ -993,28 +1021,20 @@ var updateDetail = function(page) {
     .style('fill', 'url(#varToModal)');
     
   // handle modal_i -> modal_j
-  cor.append('path')
+  parentGrp.append('path')
     .attr('d', function(d) {
       var n = mimj(d);
       var iy = avi(d) + mivj(d); // + gap
       var jy = avj(d) + vimj(d); // + gap
       
-      var path = "M 290 " + (s(d,iy) + gap);
-      path += " L 10 " + (s(d,jy) + gap);
+      var path = "M " + rightX + " " + (s(d,iy) + gap);
+      path += " L " + leftX + " " + (s(d,jy) + gap);
       path += " l 0 " + s(d,n);
-      path += " L 290 " + (s(d,iy+n) + gap);
+      path += " L " + rightX + " " + (s(d,iy+n) + gap);
       path += " l 0 -" + s(d,n);
       return path;
     })
     .style('fill', 'rgb(0,255,0)');
-    
-  // EXIT STEP
-  jpos.exit()
-    .transition()
-      .duration(500)
-      .attr('y', 70)
-      .style('fill-opacity', 1e-6)
-      .remove();
 };
 
 $(document).ready(function() {
