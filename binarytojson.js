@@ -346,6 +346,15 @@ var filterData = function() {
   console.timeEnd("filtering");
 };
 
+var loadDataset = function(datasetName, datasetObj) {
+  var dataDir = "data/" + datasetName + "/";
+
+  makeBinaryFileRequest(dataDir + datasetObj.attenuation, 'depth');
+  makeBinaryFileRequest(dataDir + datasetObj.variantCounts, 'counts');
+  makeBinaryFileRequest(dataDir + datasetObj.metrics[0], 'metric');
+};
+
+
 var checkFilterEntry = function(i, j) {
   curVal = metrics[i][j];
   
@@ -357,8 +366,7 @@ var checkFilterEntry = function(i, j) {
     return;
   }
     
-  // check for minimum depth; quit if fails
-  var minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
+  // check for minimum depth; quit if failsvar minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
   if (!curVal.hasOwnProperty('depth') || curVal.depth < minDepth) {
     console.warn("position (%d, %d) failed depth check: wanted %f% of %d (%d), found %d (%s%)",
       i, j, Math.floor(minDepthPercent * 100), metrics['bounds']['depth']['max'], minDepth, curVal.depth, (curVal.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2));
@@ -1073,9 +1081,58 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
 };
 
 $(document).ready(function() {
+  var datasets;
+  
+  var ignoreHashChange = false;
+  var checkHash = function() {
+    if (ignoreHashChange === false) {
+      // remove all data from the canvas
+      d3.select("#d3canvas .overview").selectAll("*").remove();
+      d3.select("#d3canvas .detail").selectAll("*").remove();
+      metrics = {};
+    
+      var curDataset;
+      if (window.location.hash) {
+        curDataset = window.location.hash.substring(1);
+      } else {
+        if (Object.keys(datasets) == 0) {
+          console.error("no datasets are defined, quitting...");
+          return;
+        }
+        
+        ignoreHashChange = true;
+        curDataset = Object.keys(datasets)[4];
+      }
+      
+      // update the current button text
+      $("#currentDataset").html(curDataset);
+      
+      // actually load the dataset (matrixviewer.js)
+      loadDataset(curDataset, datasets[curDataset]);
+    }
+
+    // if `ignoreHashChange` was true, set it to `false` for the next call
+    ignoreHashChange = false;
+  };
+  
+  window.addEventListener('hashchange', checkHash, false);
+  
+  $.getJSON("definedData.json", function(data, status) {
+    datasets = data.datasets;
+    $("#datasetOptions").html("")
+    
+    for (dataset in datasets) {
+      $("#datasetOptions").append('<li><a href="#' + dataset + '">' + dataset + '</a></li>');
+    }
+    
+    checkHash();
+  });
+  
+  /*
   makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/conjProbDiff.dat", "metric");
   makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/variantCounts.dat", "counts");
   makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/readBreadth.dat", "depth");
+  */
 
   // set up sliders
   $("#threshold-depth").slider({
@@ -1115,13 +1172,6 @@ $(document).ready(function() {
   
   console.log("done");
   
-  // try to output a json file [doesn't work, json too big]
-  // <http://stackoverflow.com/questions/22055598/writing-a-json-object-to-a-text-file-in-javascript>
-  /*
-  var url = 'data:text/json;charset=utf8,' + encodeURIComponent(JSON.stringify(metrics));
-  console.log("finished");
-  window.open(url, '_blank');
-  window.focus();*/
   
   
 });
