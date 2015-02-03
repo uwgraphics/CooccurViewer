@@ -337,12 +337,6 @@ var filterData = function() {
         
         filtered.push(newEntry);
       }
-      
-      /*
-      if (!filtered.hasOwnProperty(i))
-        filtered[i] = {};
-      
-      filtered[i][j] = curVal;*/
     });
   });
   
@@ -632,12 +626,6 @@ var updateVis = function() {
       .on('mouseout', tip.hide);
       
   var barHeight = 20;
-      
-  /*
-  newPos.append('rect')
-    .attr('width', x.rangeBand())
-    .attr('height', barHeight)
-    .style('fill', '#f00');*/
   
   newPos.append('rect')
     .attr('class', 'depth')
@@ -862,18 +850,6 @@ var updateDetail = function(page) {
       });
     
   drawCorrelationDiagram(multiples, 70, 60, 0.05);
-    
-  /*
-  multiples.append('rect')
-    .attr('width', 70)
-    .attr('height', 60)
-    .attr('x', function(d, i) {
-      return (i % 3) * 80;
-    })
-    .attr('y', function(d, i) {
-      return Math.floor(i / 3) * 70;
-    })
-    .style('fill', '#f00');*/
     
   // set the domain for the y-scale
   y.domain(curDetail.map(function(d) { return d.posj; }));
@@ -1233,12 +1209,6 @@ $(document).ready(function() {
     
     checkHash();
   });
-  
-  /*
-  makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/conjProbDiff.dat", "metric");
-  makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/variantCounts.dat", "counts");
-  makeBinaryFileRequest("data/VHA3_P1_F991_DPI3-ref/readBreadth.dat", "depth");
-  */
 
   // set up sliders
   $("#threshold-depth").slider({
