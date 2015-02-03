@@ -230,6 +230,21 @@ svg .axis text {
 	background-image: linear-gradient(to bottom, #53199e 0%, #4a1486 100%);
 }
 
+#d3loading {
+	border: 1px solid #000;
+	height: 800px;
+	width: 1000px;
+	position: absolute;
+	left: 15px;
+	border: 1px solid #000;
+	box-sizing: content-box;
+	background: #eee url("img/loading.gif") no-repeat scroll center center;
+}
+
+#d3loading #status {
+	left: 300px;
+}
+
 #d3canvas {
 	width: 1000px;
 	height: 800px;

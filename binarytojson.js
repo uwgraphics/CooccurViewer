@@ -37,6 +37,7 @@ var loadBinaryData = function(data, name) {
   ready = false;
 
   console.time("parsing file " + name);
+  updateLoadingStatus("parsing " + name + " file...");
 
   var dv = new DataView(data);
 
@@ -210,6 +211,7 @@ var loadBinaryData = function(data, name) {
   }
 
   console.timeEnd("parsing file " + name);
+  updateLoadingStatus("collecting data...");
   continueIfDone();
 };
 
@@ -264,6 +266,7 @@ var continueIfDone = function() {
 var filterData = function() {
   
   // try to filter out anything that doesn't meet the following criteria
+  updateLoadingStatus("filtering data based on thresholds...");
   
   // try filtering on depth
   console.time("filtering");
@@ -344,11 +347,14 @@ var filterData = function() {
   });
   
   console.timeEnd("filtering");
+  hideLoading();
 };
 
 var loadDataset = function(datasetName, datasetObj) {
   var dataDir = "data/" + datasetName + "/";
 
+  updateLoadingStatus("loading dataset " + datasetName);
+  
   makeBinaryFileRequest(dataDir + datasetObj.attenuation, 'depth');
   makeBinaryFileRequest(dataDir + datasetObj.variantCounts, 'counts');
   makeBinaryFileRequest(dataDir + datasetObj.metrics[0], 'metric');
@@ -498,7 +504,7 @@ var metricScale = d3.scale.quantize()
   .range(colorbrewer.Purples[7]);
   
 var metricColorScale = d3.scale.quantize()
-  .range(colorbrewer.RdBu[9]);
+  .range(Array.prototype.slice.call(colorbrewer.RdBu[9]).reverse());
 
 var detailScales = {};
 var detailData = [];
@@ -509,8 +515,8 @@ var updateVis = function() {
   
   // set domains that depend on bounds of data
   metricColorScale.domain([
-    metrics.bounds.metric.max, 
-    metrics.bounds.metric.min
+    metrics.bounds.metric.min, 
+    metrics.bounds.metric.max
   ]);
   depthScale.domain([metrics.bounds.depth.min, metrics.bounds.depth.max]);
 
@@ -596,13 +602,13 @@ var updateVis = function() {
   
   // EXIT STEP
   
-  
+  hideLoading();
 };
 
 // type is one of {'metric', 'depth', 'variants'}
 var makeColorRamp = function(type, parent, i, label, width, height) {
-  width = width | 50;
-  height = height | 6;
+  width = width || 63;
+  height = height || 6;
   
   var calcVar;
   var scale;
@@ -675,7 +681,7 @@ var makeColorRamp = function(type, parent, i, label, width, height) {
     });
     
   ramp.append('text')
-    .attr('x', 63)
+    .attr('x', width + 13)
     .attr('y', 23)
     .text(label);
 };
@@ -794,7 +800,7 @@ var updateDetail = function(page) {
   var newDetail = newJpos.append('g')
     .attr('class', 'detail')
     .attr('transform',
-      'translate(' + (detailWidth + x.rangeBand() + 3) + "," + (y.rangeBand() / 2 - 30) + ')'
+      'translate(' + (detailWidth + 10) + "," + Math.floor(y.rangeBand() * 0.1) + ")"
     );
     
   makeColorRamp('metric', newDetail, 0,
@@ -1078,6 +1084,16 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
       return path;
     })
     .style('fill', 'rgb(0,255,0)');
+};
+
+var updateLoadingStatus = function(msg) {
+  $("#d3loading").show();
+  $("#status").html(msg);
+};
+
+var hideLoading = function() {
+  $("#d3loading").hide();
+  $("#status").html("");
 };
 
 $(document).ready(function() {
