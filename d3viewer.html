@@ -92,43 +92,7 @@
 <div id="faq" class="modal fade" tabIndex="-2" role="dialog" aria-labelledby="faqLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                <h4 class="modal-title" id="faqLabel">How to Use MatrixViewer JS</h4>
-            </div>
-            <div class="modal-body">
-                <p>
-                    This project is a JavaScript implementation of viewing data encoded in a matrix around the matrix diagonal.  The current use case is to find co-occurrences in viral populations, which can indicate how viruses adapt to environmental pressures, such as the host organism's immune system.
-                </p><p>
-                    This current implementation is architected by <a href="http://cs.wisc.edu/~sarikaya" target="_blank">Alper Sarikaya</a> to test the practicality of WebGL as a visualization medium.  The project is version-controlled in a private repository.  The stable version of the visualization is available (temporarily) <a href="http://cs.wisc.edu/~sarikaya/static/cooccur" target="_new">here</a>, while an in-progress version is available <a href="http://cs.wisc.edu/~sarikaya/research/cooccur" target="_new">here</a>.
-                </p>
-                <p>&nbsp;</p>
-                
-                <h4>Interacting with the Data</h4>
-                <p>
-                    The data is displayed diagonally by default, with the <strong>i</strong>th position on the y-axis, and the <strong>j</strong>th position on the x-axis.  The following methods itemize the ways to interact with the visualization.
-                </p>
-                    
-                <ul id="interactionList">
-                    <li><em class="stronk">Clicking in the overview</em> will navigate the main view to the area highlighted by the green bar.  The mouse must stay within the top bar when panning the dataset.</li>
-                    <li><em class="stronk">Using the scroll wheel</em> within the canvas will change the zoom level of the current view.  The position of the cursor will focus the area of zoom, but the zoom position will always be fixed toward the diagonal of the matrix.</li>
-                    <li><em class="stronk">Hovering the mouse</em> over the dataset at a particular position brings up the encoded data in the 'super-zoom' at top-right, which shows the a view of the current coordinates and metric value(s) under the mouse.</li>
-                    <li><em class="stronk">Clicking the dataset</em> will freeze the 'super-zoom' (which will blink), allowing for more detailed examination of the data.  Further, <em class="stronk">clicking on a 'pixel' in the 'super-zoom'</em> will display the counts of non-variant and variant reads in the below view.</li>
-                    <li><em class="stronk">Clicking a count rectangle</em> in the counts view will condition the reads of the paired read.  This conditioned view can be reset by again clicking on the appropriate pixel in the 'super-zoom.'</li>
-                    <li><em class="stronk">Switching the <strong>metric</strong></em> will cause the visualization to ask for the data file (up to 15 seconds) and load it into the visualization (1 second).  The equation used to compute each metric is displayed below the drop-down.</li>
-                    <li><em class="stronk">Enabling <strong>gating</strong></em> will blank out any color if the <strong>i</strong>th position does not contain at least <strong>x%</strong> variants.  This helps to elimate noise in the visualization and promotes salience of highly-correlated variants.</li>
-                </ul>
-                <p>&nbsp;</p>
-                
-                <h4>Implementation Notes</h4>
-                <p>
-                    This implementation has been tested in Google Chrome (v36) and Firefox (v32).  Client computers must support WebGL (GPU, drivers, browser, OS) and the <strong>OES_float_texture</strong> WebGL extension for correct rendering. Check WebGL support of your current configuration on <a href="http://webglreport.com/" target="_blank">WebGL Report</a>. Internet Explorer and Safari do not support WebGL due to security concerns.
-                </p>
-            </div>
-            <div class="modal-footer">
-                <p class="pull-left small" style="margin-top: 10px;">&copy; 2014 &mdash; <a href="http://graphics.cs.wisc.edu" target="_new">UW Graphics Group</a>, <a href="http://wisc.edu" target="_new">University of Wisconsin-Madison</a></p>
-                <button class="btn btn-success" data-dismiss="modal">Close</button>
-            </div>
+            
         </div>
     </div>
 </div>

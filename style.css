@@ -232,7 +232,7 @@ svg .axis text {
 
 #d3loading {
 	border: 1px solid #000;
-	height: 800px;
+	height: 900px;
 	width: 1000px;
 	position: absolute;
 	left: 15px;
@@ -242,12 +242,13 @@ svg .axis text {
 }
 
 #d3loading #status {
+	top: 475px;
 	left: 300px;
 }
 
 #d3canvas {
 	width: 1000px;
-	height: 800px;
+	height: 900px;
 	border: 1px solid #000;
 }
 
@@ -285,6 +286,34 @@ svg .axis text {
 	width: 2px;
 	border-radius: 0;
 }
+
+/* try doing svg sliders with d3
+   see <http://bl.ocks.org/mbostock/6452972> */
+   
+.axis {
+	font: 10px sans-serif;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
+}
+
+.axis .domain {
+	fill: none;
+	stroke: #000;
+	stroke-opacity: .8;
+	stroke-width: 12px;
+	stroke-linecap: round;
+}
+
+.slider .handle {
+	fill: #fff;
+	stroke: #000;
+	stroke-opacity: .5;
+	stroke-width: 1.25px;
+	cursor: crosshair;
+}
+   
+/* old slider stuff */
 
 #depth-slider .slider-track  {
 	background: #f5f5f5 url('img/depth-bg.png') repeat-y left top;

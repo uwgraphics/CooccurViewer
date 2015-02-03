@@ -441,8 +441,9 @@ var detailView = d3.select("#d3canvas")
     .attr('transform', 'translate(30, 170)');
     
 // define red/green linear gradients
-var gradient = d3.select('#d3canvas').append('defs')
-  .append('linearGradient')
+var defs = d3.select('#d3canvas').append('defs');
+
+var gradient = defs.append('linearGradient')
     .attr('id', 'varToModal')
     .attr('x1', '0%')
     .attr('y1', '0%')
@@ -460,8 +461,7 @@ gradient.append('stop')
   .attr('stop-color', 'rgb(0,255,0)')
   .attr('stop-opacity', 1);
   
-gradient = d3.select('#d3canvas').append('defs')
-  .append('linearGradient')
+gradient = defs.append('linearGradient')
     .attr('id', 'modalToVar')
     .attr('x1', '0%')
     .attr('y1', '0%')
@@ -508,6 +508,96 @@ var metricColorScale = d3.scale.quantize()
 
 var detailScales = {};
 var detailData = [];
+
+// try doing the scales
+var xDepth = d3.scale.linear().domain([0, 100]).range([0, 100]).clamp(true);
+var bDepth = d3.svg.brush()
+  .x(xDepth)
+  .extent([0,0])
+  .on('brush', brushed);
+  
+var sliders = d3.select("#d3canvas").append('g')
+  .attr('transform', 'translate(30,800)')
+  .attr('class', 'sliders');
+  
+var gDepth = sliders.append('g')
+  .attr('class', 'depth-slider');
+  
+var aDepth = gDepth.append('g')
+  .attr('class', 'x axis')
+  .attr('transform', 'translate(0, 50)')
+  .call(d3.svg.axis()
+    .scale(xDepth)
+    .orient('bottom')
+    .tickFormat(function(d) { return ">" + d + "%"; })
+    .ticks(3)
+    .tickSize(0)
+    .tickPadding(12));
+    
+aDepth.append('g')
+  .attr('class', 'legend')
+  .attr('transform', 'translate(0,-5)')
+  .selectAll('rect')
+    .data(depthScale.range())
+    .enter()
+      .append('rect')
+        .attr('x', function(d,i) { return i * 100 / 7; })
+        .attr('y', 0)
+        .attr('width', 100 / 7)
+        .attr('height', 10)
+        .style('fill', function(d) { return d; });
+    
+var sMetric = gDepth.append('g')
+  .attr('class', 'slider')
+  .call(bDepth);
+  
+sMetric.selectAll('.extent,.resize').remove();
+sMetric.select('.background').attr('height', 20).attr('transform', 'translate(0,40)');
+
+var hMetric = sMetric.append('circle')
+  .attr('class', 'handle')
+  .attr('transform', 'translate(0,50)')
+  .attr('r', 9);
+  
+sMetric.call(bDepth.event).call(bDepth.extent([70,70])).call(bDepth.event);
+
+var makeSlider = function(type) {
+  var colors;
+  var sliderX;
+  
+  switch (type) {
+    case 'depth':
+      colors = depthScale.range();
+      sliderX = 150;
+      break;
+    case 'variant':
+      colors = variantScale.range();
+      sliderX = 300;
+      break;
+    case 'metric':
+      colors = metricScale.range();
+      sliderX = 450;
+      break;
+    default:
+      console.error('got unknown type for slider');
+      return;
+  }
+  
+  
+};
+  
+var testVal = 0;  
+function brushed() {
+  var val = bDepth.extent()[0];
+  if (d3.event.sourceEvent) {  // e.g. not a programmatic event
+    val = xDepth.invert(d3.mouse(this)[0]);
+    bDepth.extent([val, val]);
+  }
+  
+  hMetric.attr('cx', xDepth(val));
+  testVal = val;
+}
+  
     
 var updateVis = function() { 
   // do the brain-dead thing and just wipe everything
