@@ -247,6 +247,8 @@ var makeBinaryFileRequest = function(filename, name) {
   xhr.send(null);
 };
 
+var brushes = {};
+var firstRun = true;
 var continueIfDone = function() {
   
   var theIs = Object.keys(metrics);
@@ -280,6 +282,7 @@ var continueIfDone = function() {
   makeSlider('variant');
   makeSlider('metric');
   
+  firstRun = false;
   filterData();
   updateVis();
 };
@@ -693,10 +696,11 @@ var makeSlider = function(type) {
   }
   
   var xScale = d3.scale.linear().domain([0, 100]).range([0, 100]).clamp(true);
-  var brush = d3.svg.brush()
+  brushes[type] = d3.svg.brush()
     .x(xScale)
     .extent([0,0])
-    .on('brush', brushed);
+    .on('brush', brushed)
+    .on('brushend', brushended);
     
   // select the sliders group; create if it doesn't exist
   var sliders = d3.select("#d3canvas").selectAll('g.sliders').data([0]);
@@ -735,7 +739,7 @@ var makeSlider = function(type) {
       
   var slider = sliderParent.append('g')
     .attr('class', 'slider')
-    .call(brush);
+    .call(brushes[type]);
     
   slider.selectAll('.extent,.resize').remove();
   slider.select('.background').attr('height', 20).attr('transform', 'translate(0,40)');
@@ -744,8 +748,6 @@ var makeSlider = function(type) {
     .attr('class', 'handle')
     .attr('transform', 'translate(0,50)')
     .attr('r', 9);
-    
-  slider.call(brush.event).call(brush.extent([startVal,startVal])).call(brush.event);
   
   // do bars now
   histoScales.x[type] = d3.scale.linear()
@@ -785,17 +787,44 @@ var makeSlider = function(type) {
     .attr('height', function(d) {
       return 50 - histoScales.y[type](d.y);
     });
-  
+    
+  // finally, call the slider events to set everything up
+  slider.call(brushes[type].extent([startVal,startVal])).call(brushes[type].event);
   
   function brushed() {
-    var val = brush.extent()[0];
+    var val = brushes[type].extent()[0];
     if (d3.event.sourceEvent) {  // e.g. not a programmatic event
       val = xScale.invert(d3.mouse(this)[0]);
-      brush.extent([val, val]);
+      brushes[type].extent([val, val]);
     }
     
     handle.attr('cx', xScale(val));
-    window.alert('got value from ' + type + ': ' + val);
+  };
+  
+  function brushended() {
+    var val = brushes[type].extent()[0];
+    if (d3.event.sourceEvent) {  // e.g. not a programmatic event
+      val = xScale.invert(d3.mouse(this)[0]);
+      brushes[type].extent([val, val]);
+    }
+    
+    if (!firstRun) {
+      switch (type) {
+        case 'metric':
+          minMetric = histoScales.x[type].invert(val);
+          break;
+        case 'variant':
+          minVariants = histoScales.x[type].invert(val);
+          break;
+        case 'depth':
+          var depthThresh = histoScales.x[type].invert(val);
+          minDepthPercent = depthThresh / metrics.bounds.depth.max;
+          break;
+      }
+      
+      filterData();
+      updateVis();
+    }
   };
 };
 
@@ -808,6 +837,7 @@ var updateVis = function() {
 
   // do the brain-dead thing and just wipe everything
   overview.selectAll('g.ipos').remove();
+  detailView.selectAll('*').remove();
   
   // set domains that depend on bounds of data
   metricColorScale.domain([
