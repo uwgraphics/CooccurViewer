@@ -9,6 +9,14 @@ var ds = {
 var metrics = {};
 var filtered = {};
 
+// some sort of method to keep track of what the distribution of values looks like
+// (populate on loading data)
+var threshCounts = {
+  'depth': [],
+  'variant': [],
+  'metric': []
+};
+
 // parameters to filter on (eventually make these user-configurable)
 var minDepthPercent = 0.25;
 var minVariants = 0.1;
@@ -259,9 +267,47 @@ var continueIfDone = function() {
     return;
   }
   
+  // try doing the scales
+  collectStats();
+  makeSlider('depth');
+  makeSlider('variant');
+  makeSlider('metric');
+  
   filterData();
   updateVis();
 };
+
+var collectStats = function() {
+  // for each element, gather and save distributions of metrics
+  console.time('collecting stats');
+  
+  var is = Object.keys(metrics);
+  is.forEach(function(curI) {
+    if (curI === 'bounds') return;
+    
+    var js = Object.keys(metrics[curI]);
+    js.forEach(function(curJ) {
+      var curPair = metrics[curI][curJ];
+      
+      if (curPair.hasOwnProperty('depth'))
+        threshCounts.depth.push(curPair.depth);
+      
+      if (curPair.hasOwnProperty('counts')) {
+        threshCounts.variant.push(
+          Math.min(
+            (curPair.counts[2] + curPair.counts[3]) / curPair.depth,
+            (curPair.counts[1] + curPair.counts[3]) / curPair.depth
+          )
+        );
+      }
+      
+      if (curPair.hasOwnProperty('metric'))
+        threshCounts.metric.push(Math.abs(curPair.metric));
+    });
+  });
+  
+  console.timeEnd('collecting stats');
+};  
   
 var filterData = function() {
   
@@ -502,7 +548,7 @@ var metricColorScale = d3.scale.quantize()
 
 
 var makeSlider = function(type) {
-  var colors, sliderX, displayFunc, startVal;
+  var colors, sliderX, displayFunc, startVal, dataDomain;
   
   switch (type) {
     case 'depth':
@@ -510,18 +556,21 @@ var makeSlider = function(type) {
       startVal = 25;
       displayFunc = function(d) { return ">" + d + "%"; };
       sliderX = 150;
+      dataDomain = [0, metrics.bounds.depth.max]; 
       break;
     case 'variant':
       colors = variantScale.range();
       startVal = 10;
       displayFunc = function(d) { return ">" + d + "%"; };
       sliderX = 450;
+      dataDomain = [0, 1];
       break;
     case 'metric':
       colors = metricScale.range();
       startVal = 30;
       displayFunc = function(d) { return "> |" + (d / 100).toFixed(1) + "|"; };
       sliderX = 750;
+      dataDomain = [0, 1];
       break;
     default:
       console.error('got unknown type for slider');
@@ -583,6 +632,35 @@ var makeSlider = function(type) {
     
   slider.call(brush.event).call(brush.extent([startVal,startVal])).call(brush.event);
   
+  // do bars now
+  var barX = d3.scale.linear().domain(dataDomain).range([0, 100]);
+  var barGroup = sliderParent.append('g')
+    .attr('class', 'legend-bars');
+    
+  var barData = d3.layout.histogram()
+    .bins(barX.ticks(10))
+    (threshCounts[type]);
+  
+  var barY = d3.scale.linear()
+    .domain([0, d3.max(barData, function(d) { return d.y; })])
+    .range([50, 0]);
+    
+  var bar = barGroup.selectAll('.bar')
+    .data(barData)
+      .enter().append('g')
+        .attr('class', 'bar')
+        .attr('transform', function(d) {
+          return 'translate(' + barX(d.x) + ',' + barY(d.y) + ')';
+        });
+        
+  bar.append('rect')
+    .attr('x', 1)
+    .attr('width', barX(barData[0].dx) - 1)
+    .attr('height', function(d) {
+      return 50 - y(d.y);
+    });
+  
+  
   function brushed() {
     var val = brush.extent()[0];
     if (d3.event.sourceEvent) {  // e.g. not a programmatic event
@@ -594,11 +672,6 @@ var makeSlider = function(type) {
     window.alert('got value from ' + type + ': ' + val);
   };
 };
-
-// try doing the scales
-makeSlider('depth');
-makeSlider('variant');
-makeSlider('metric');
 
 var detailScales = {};
 var detailData = [];    
