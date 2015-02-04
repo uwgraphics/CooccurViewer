@@ -267,6 +267,13 @@ var continueIfDone = function() {
     return;
   }
   
+  // set a visibility field
+  Object.keys(metrics).forEach(function(curI) {
+    Object.keys(metrics[curI]).forEach(function(curJ) {
+      metrics[curI][curJ]['visible'] = false;
+    });
+  });
+  
   // try doing the scales
   collectStats();
   makeSlider('depth');
@@ -308,7 +315,53 @@ var collectStats = function() {
   
   console.timeEnd('collecting stats');
 };  
+
+var flatMetrics = [];
+var tryCollectStats = function() {
+  console.time('trying new filtering');
+
+  flatMetrics = [];
   
+  d3.keys(metrics).forEach(function(curI) {
+    d3.keys(metrics[curI]).forEach(function(curJ) {
+      // filter here
+      var curVal = metrics[curI][curJ];
+      if (!curVal.hasOwnProperty('depth') || !curVal.hasOwnProperty('counts') || !curVal.hasOwnProperty('metric'))
+        return;
+        
+      var minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
+      if (curVal.depth < minDepth) {
+        metrics[curI][curJ].visible = false;
+        return;
+      }
+      
+      var varLevel = (curVal.counts[2] + curVal.counts[3]) / curVal.depth;
+      if (varLevel < minVariants) {
+        metrics[curI][curJ].visible = false;
+        return;
+      }
+      
+      varLevel = (curVal.counts[1] + curVal.counts[3]) / curVal.depth;
+      if (varLevel < minVariants) {
+        metrics[curI][curJ].visible = false;
+        return;
+      }
+      
+      if (Math.abs(curVal.metric) < minMetric) {
+        metrics[curI][curJ].visible = false;
+        return;
+      }
+      
+      metrics[curI][curJ].visible = true;
+      
+      flatMetrics.push(metrics[curI][curJ]);
+    });
+  });
+  
+  console.timeEnd('trying new filtering');
+};
+
+var histoScales = {'x': {}, 'y': {}};
 var filterData = function() {
   
   // try to filter out anything that doesn't meet the following criteria
@@ -387,7 +440,69 @@ var filterData = function() {
   });
   
   console.timeEnd("filtering");
+  
   hideLoading();
+};
+
+binThresholds = {};
+var updateHistograms = function() { 
+  // update the histograms
+  tryCollectStats();
+  
+  ['metric', 'depth', 'variant'].forEach(function(type) {
+    // collect the data for this histogram
+    var typeVals = [];
+    switch (type) {
+      case 'metric':
+      case 'depth':
+        typeVals = flatMetrics.map(function(d) {
+          return d[type];
+        });
+        break;
+      case 'variant':
+        typeVals = flatMetrics.map(function(d) {
+          return Math.min(
+            (d.counts[2] + d.counts[3]) / d.depth,
+            (d.counts[1] + d.counts[3]) / d.depth
+          );
+        });
+        break;
+      default:
+        console.error('unknown type received when redrawing selected histogram bars');
+        return;
+    }
+    
+    var selBarData = d3.layout.histogram()
+      .bins(binThresholds[type])
+      (typeVals);
+  
+    var selBar = d3.select('.' + type + '-slider').select('.legend-bars').selectAll('.barVisible')
+      .data(selBarData);
+      
+    // ENTER  
+    var newBar = selBar.enter()
+      .append('g')
+        .attr('class', 'barVisible')
+        .attr('transform', function(d) {
+          return 'translate(' + histoScales.x[type](d.x) + ',' + histoScales.y[type](d.y) + ')';
+        });
+            
+    newBar.append('rect')
+      .attr('x', 1)
+      .attr('width', histoScales.x[type](selBarData[0].dx) - 1)
+      .style('fill', '#f00');
+      
+    // ENTER + UPDATE
+    selBar.attr('transform', function(d) {
+      return 'translate(' + histoScales.x[type](d.x) + ',' + histoScales.y[type](d.y) + ')';
+    });
+    
+    selBar.select('rect')
+      .attr('width', histoScales.x[type](selBarData[0].dx) - 1)
+      .attr('height', function(d) {
+        return 50 - histoScales.y[type](d.y);
+      });
+  });
 };
 
 var loadDataset = function(datasetName, datasetObj) {
@@ -546,7 +661,7 @@ var metricScale = d3.scale.quantize()
 var metricColorScale = d3.scale.quantize()
   .range(Array.prototype.slice.call(colorbrewer.RdBu[9]).reverse());
 
-
+var numBins = 7;
 var makeSlider = function(type) {
   var colors, sliderX, displayFunc, startVal, dataDomain;
   
@@ -633,15 +748,26 @@ var makeSlider = function(type) {
   slider.call(brush.event).call(brush.extent([startVal,startVal])).call(brush.event);
   
   // do bars now
-  var barX = d3.scale.linear().domain(dataDomain).range([0, 100]);
-  var barGroup = sliderParent.append('g')
-    .attr('class', 'legend-bars');
+  histoScales.x[type] = d3.scale.linear()
+    .domain(dataDomain)
+    .range([0, 100]);
     
+  var barGroup = sliderParent.append('g')
+    .attr('class', 'legend-bars')
+    .attr('transform', 'translate(0,-10)');
+  
+  // compute thresholds for histogram binning
+  // thanks to <http://stackoverflow.com/questions/20367899/d3-js-controlling-ticks-and-bins-on-a-histogram>
+  var tempScale = d3.scale.linear()
+    .domain([0,numBins])
+    .range(dataDomain);
+  binThresholds[type] = d3.range(numBins+1).map(tempScale);
+  
   var barData = d3.layout.histogram()
-    .bins(barX.ticks(10))
+    .bins(binThresholds[type])
     (threshCounts[type]);
   
-  var barY = d3.scale.linear()
+  histoScales.y[type] = d3.scale.linear()
     .domain([0, d3.max(barData, function(d) { return d.y; })])
     .range([50, 0]);
     
@@ -650,14 +776,14 @@ var makeSlider = function(type) {
       .enter().append('g')
         .attr('class', 'bar')
         .attr('transform', function(d) {
-          return 'translate(' + barX(d.x) + ',' + barY(d.y) + ')';
+          return 'translate(' + histoScales.x[type](d.x) + ',' + histoScales.y[type](d.y) + ')';
         });
         
   bar.append('rect')
     .attr('x', 1)
-    .attr('width', barX(barData[0].dx) - 1)
+    .attr('width', histoScales.x[type](barData[0].dx) - 1)
     .attr('height', function(d) {
-      return 50 - y(d.y);
+      return 50 - histoScales.y[type](d.y);
     });
   
   
@@ -677,6 +803,9 @@ var detailScales = {};
 var detailData = [];    
 
 var updateVis = function() { 
+  // update histograms
+  updateHistograms();
+
   // do the brain-dead thing and just wipe everything
   overview.selectAll('g.ipos').remove();
   

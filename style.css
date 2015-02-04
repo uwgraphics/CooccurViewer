@@ -290,14 +290,14 @@ svg .axis text {
 /* try doing svg sliders with d3
    see <http://bl.ocks.org/mbostock/6452972> */
    
-.axis {
+#d3canvas .axis {
 	font: 10px sans-serif;
 	-webkit-user-select: none;
 	-moz-user-select: none;
 	user-select: none;
 }
 
-.axis .domain {
+#d3canvas .axis .domain {
 	fill: none;
 	stroke: #000;
 	stroke-opacity: .8;
@@ -305,12 +305,16 @@ svg .axis text {
 	stroke-linecap: round;
 }
 
-.slider .handle {
+#d3canvas .slider .handle {
 	fill: #fff;
 	stroke: #000;
 	stroke-opacity: .5;
 	stroke-width: 1.25px;
 	cursor: crosshair;
+}
+
+#d3canvas .bar, #d3canvas .barVisible {
+	shape-rendering: crispEdges;
 }
    
 /* old slider stuff */
