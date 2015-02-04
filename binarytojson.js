@@ -500,99 +500,109 @@ var metricScale = d3.scale.quantize()
 var metricColorScale = d3.scale.quantize()
   .range(Array.prototype.slice.call(colorbrewer.RdBu[9]).reverse());
 
-var detailScales = {};
-var detailData = [];
-
-// try doing the scales
-var xDepth = d3.scale.linear().domain([0, 100]).range([0, 100]).clamp(true);
-var bDepth = d3.svg.brush()
-  .x(xDepth)
-  .extent([0,0])
-  .on('brush', brushed);
-  
-var sliders = d3.select("#d3canvas").append('g')
-  .attr('transform', 'translate(30,800)')
-  .attr('class', 'sliders');
-  
-var gDepth = sliders.append('g')
-  .attr('class', 'depth-slider');
-  
-var aDepth = gDepth.append('g')
-  .attr('class', 'x axis')
-  .attr('transform', 'translate(0, 50)')
-  .call(d3.svg.axis()
-    .scale(xDepth)
-    .orient('bottom')
-    .tickFormat(function(d) { return ">" + d + "%"; })
-    .ticks(3)
-    .tickSize(0)
-    .tickPadding(12));
-    
-aDepth.append('g')
-  .attr('class', 'legend')
-  .attr('transform', 'translate(0,-5)')
-  .selectAll('rect')
-    .data(depthScale.range())
-    .enter()
-      .append('rect')
-        .attr('x', function(d,i) { return i * 100 / 7; })
-        .attr('y', 0)
-        .attr('width', 100 / 7)
-        .attr('height', 10)
-        .style('fill', function(d) { return d; });
-    
-var sMetric = gDepth.append('g')
-  .attr('class', 'slider')
-  .call(bDepth);
-  
-sMetric.selectAll('.extent,.resize').remove();
-sMetric.select('.background').attr('height', 20).attr('transform', 'translate(0,40)');
-
-var hMetric = sMetric.append('circle')
-  .attr('class', 'handle')
-  .attr('transform', 'translate(0,50)')
-  .attr('r', 9);
-  
-sMetric.call(bDepth.event).call(bDepth.extent([70,70])).call(bDepth.event);
 
 var makeSlider = function(type) {
-  var colors;
-  var sliderX;
+  var colors, sliderX, displayFunc, startVal;
   
   switch (type) {
     case 'depth':
       colors = depthScale.range();
+      startVal = 25;
+      displayFunc = function(d) { return ">" + d + "%"; };
       sliderX = 150;
       break;
     case 'variant':
       colors = variantScale.range();
-      sliderX = 300;
+      startVal = 10;
+      displayFunc = function(d) { return ">" + d + "%"; };
+      sliderX = 450;
       break;
     case 'metric':
       colors = metricScale.range();
-      sliderX = 450;
+      startVal = 30;
+      displayFunc = function(d) { return "> |" + (d / 100).toFixed(1) + "|"; };
+      sliderX = 750;
       break;
     default:
       console.error('got unknown type for slider');
       return;
   }
   
-  
-};
-  
-var testVal = 0;  
-function brushed() {
-  var val = bDepth.extent()[0];
-  if (d3.event.sourceEvent) {  // e.g. not a programmatic event
-    val = xDepth.invert(d3.mouse(this)[0]);
-    bDepth.extent([val, val]);
-  }
-  
-  hMetric.attr('cx', xDepth(val));
-  testVal = val;
-}
-  
+  var xScale = d3.scale.linear().domain([0, 100]).range([0, 100]).clamp(true);
+  var brush = d3.svg.brush()
+    .x(xScale)
+    .extent([0,0])
+    .on('brush', brushed);
     
+  // select the sliders group; create if it doesn't exist
+  var sliders = d3.select("#d3canvas").selectAll('g.sliders').data([0]);
+  sliders.enter()
+    .append('g')
+      .attr('transform', 'translate(30,800)')
+      .attr('class', 'sliders');
+    
+  var sliderParent = sliders.append('g')
+    .attr('class', type + '-slider')
+    .attr('transform', 'translate(' + sliderX + ',0)');
+    
+  var sliderGroup = sliderParent.append('g')
+    .attr('class', 'x axis')
+    .attr('transform', 'translate(0, 50)')
+    .call(d3.svg.axis()
+      .scale(xScale)
+      .orient('bottom')
+      .tickFormat(displayFunc)
+      .ticks(3)
+      .tickSize(0)
+      .tickPadding(12));
+      
+  sliderGroup.append('g')
+    .attr('class', 'legend')
+    .attr('transform', 'translate(0,-5)')
+    .selectAll('rect')
+      .data(colors)
+      .enter()
+        .append('rect')
+          .attr('x', function(d,i) { return i * 100 / 7; })
+          .attr('y', 0)
+          .attr('width', 100 / 7)
+          .attr('height', 10)
+          .style('fill', function(d) { return d; });
+      
+  var slider = sliderParent.append('g')
+    .attr('class', 'slider')
+    .call(brush);
+    
+  slider.selectAll('.extent,.resize').remove();
+  slider.select('.background').attr('height', 20).attr('transform', 'translate(0,40)');
+
+  var handle = slider.append('circle')
+    .attr('class', 'handle')
+    .attr('transform', 'translate(0,50)')
+    .attr('r', 9);
+    
+  slider.call(brush.event).call(brush.extent([startVal,startVal])).call(brush.event);
+  
+  function brushed() {
+    var val = brush.extent()[0];
+    if (d3.event.sourceEvent) {  // e.g. not a programmatic event
+      val = xScale.invert(d3.mouse(this)[0]);
+      brush.extent([val, val]);
+    }
+    
+    handle.attr('cx', xScale(val));
+    window.alert('got value from ' + type + ': ' + val);
+  };
+};
+
+// try doing the scales
+makeSlider('depth');
+makeSlider('variant');
+makeSlider('metric');
+
+var detailScales = {};
+var detailData = [];    
+
 var updateVis = function() { 
   // do the brain-dead thing and just wipe everything
   overview.selectAll('g.ipos').remove();
