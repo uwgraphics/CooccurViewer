@@ -1,0 +1,33 @@
+# This file contains information to force the browser to cache certain 
+# information such as stagnant data, shaders, and javascript files. 
+#
+# This file causes unnecessary queries to the server to be minimized (instead 
+# of the client waiting ~300ms per file [interleaved] for just a HTTP 304 
+# response, the browser will just load the file from its cache).
+# 
+# A forced-reload of the page (ctrl-F5) will cause the browser to forgo its
+# cache and grab resources from the webserver anew.
+
+<ifModule mod_mime.c>
+	AddType text/plain vs fs
+	AddType text/plain dat csv
+</ifModule>
+<ifModule mod_expires.c>
+	ExpiresActive On
+	ExpiresByType text/plain "access plus 1 day"
+	ExpiresDefault "access plus 1 hour"
+</ifModule>
+<ifModule mod_headers.c>
+	<filesMatch "\.(dat|csv|js)$">
+		Header append Cache-Control "public"
+	</filesMatch>
+	<filesMatch "\.(fs|vs|jpe?g|png|gif|css)$">
+		Header append Cache-Control "public"
+	</filesMatch>
+	<filesMatch "\.(x?html?|php)$">
+		Header append Cache-Control "private, must-revalidate"
+	</filesMatch>
+</ifModule>
+
+php_flag  display_errors        on
+php_value error_reporting       2039

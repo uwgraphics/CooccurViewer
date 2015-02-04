@@ -1,0 +1,390 @@
+body {
+	padding-top: 70px;
+}
+
+#canvas-container {
+	height: 810px;
+}
+
+canvas { 
+	margin: 0 auto 20px;
+	border: 1px solid black;
+	display: block;
+	position: absolute;
+	top: 0px;
+}
+
+.navbar-brand img {
+	margin: -12px 7px 0 0;
+}
+
+#loading {
+	border: 1px solid #000;
+	height: 800px;
+	width: 800px;
+	position: absolute;
+	left: 15px;
+	border: 1px solid #000;
+	box-sizing: content-box;
+	background: #eee url("img/loading.gif") no-repeat scroll center center;
+}
+
+#status {
+	position: absolute;
+	top: 425px;
+	left: 200px;
+	text-align: center;
+	font-weight: 600;
+	color: #E28A36;
+	width: 400px;
+}
+
+#img-container img {
+	display: none;
+	margin: 20px auto;
+	border: 1px solid black;
+}
+
+#super-zoom {
+	box-sizing: content-box;
+	border: 1px solid #000;
+	height: 300px;
+	width: 300px;
+	z-index: 20;
+	position: absolute;
+	top: 0px;
+	left: 850px;
+}
+
+#super-zoom div {
+	height: 100px;
+	width: 100px;
+	margin: 0;
+	padding: 0;
+	float: left;
+	text-align: center;
+	padding-top: 80px;
+	color: #fff;
+	position: relative;
+	text-shadow: 1px 1px 3px #666,
+     -1px -1px 0 #000,  
+      1px -1px 0 #000,
+      -1px 1px 0 #000,
+       1px 1px 0 #000;
+}
+
+#super-zoom div>span {
+	text-align: center;
+	margin: 0 auto;
+	width: 100px;
+}
+
+#super-zoom span.coord {
+	font-size: 0.85em;
+	position: absolute;
+	top: 30px;
+	left: 0;
+}
+
+#super-zoom span.val {
+	/*margin-top:10px;*/
+}
+
+/* support a blinky animation to show that the super-zoom is frozen */
+@keyframes myblink {
+	50% { border-color: #fff; }
+}
+
+@-webkit-keyframes myblink {
+	50% { border-color: #fff; }
+}
+
+.frozen {
+	border: 3px solid #000;
+	animation: myblink .5s infinite;
+	-webkit-animation: myblink .5s infinite;
+}
+
+svg#legend {
+	box-sizing: content-box;
+	border: 1px solid #000;
+	height: 250px;
+	width: 250px;
+	z-index: -20;
+	position: absolute;
+	top: 500px;
+	left: 875px;
+}
+
+svg#detail {
+	box-sizing: content-box;
+	border: 1px solid #000;
+	height: 150px;
+	width: 260px;
+	z-index: 20;
+	position: absolute;
+	top: 325px;
+	left: 870px;
+}
+
+#detail .pos-modal {
+	fill: #7fc97f;
+}
+
+#detail .pos-var {
+	fill: #fdc086;
+}
+
+svg .axis path,
+svg .axis line {
+	fill: none;
+	stroke: #000;
+	shape-rendering: crispEdges;
+}
+
+svg .axis text {
+	font-family: sans-serif;
+	font-size: 11px;
+}
+
+#chooser {
+	border: 1px solid #000;
+	height: 200px;
+	width: 300px;
+	position: absolute;
+	left: 850px;
+	top: 775px;
+	padding: 15px;
+}
+
+#metriceq {
+	display: block;
+	margin: 10px auto;
+}
+
+#canvas-labels {
+	position: absolute;
+	z-index: -10;
+	height: 800px;
+	width: 800px;
+}
+
+#canvas-labels div {
+	position: absolute;
+	width: 60px;
+}
+
+#label-xmin {
+	top: 807px;
+	left: -10px;
+}
+
+#label-xmax {
+	top: 807px;
+	left: 770px;
+	text-align: center;
+}
+
+#label-ymin { 
+	top: 27px;
+	left: 785px;
+	transform: rotate(90deg);
+	text-align: center;
+}
+
+#label-ymax {
+	top: 787px;
+	left: 810px;
+}
+
+.slider.slider-horizontal {
+	width: 100px;
+	margin: 0 10px;
+}
+
+#gateLevel .slider-selection {
+	background: #bababa;
+}
+
+#interactionList > li {
+	margin-bottom: 1em;
+}
+
+.stronk {
+	color: #F07C68;
+}
+
+/** D3viewer styles **/
+#depth-slider .slider-handle {
+	background-color: #005a32;
+	background-image: linear-gradient(to bottom, #00723b 0%, #005a32 100%);
+}
+
+#variant-slider .slider-handle {
+	background-color: #99000d;
+	background-image: linear-gradient(to bottom, #b20016 0%, #99000d 100%);
+}
+
+#metric-slider .slider-handle {
+	background-color: #4a1486;
+	background-image: linear-gradient(to bottom, #53199e 0%, #4a1486 100%);
+}
+
+#d3loading {
+	border: 1px solid #000;
+	height: 800px;
+	width: 1000px;
+	position: absolute;
+	left: 15px;
+	border: 1px solid #000;
+	box-sizing: content-box;
+	background: #eee url("img/loading.gif") no-repeat scroll center center;
+}
+
+#d3loading #status {
+	top: 425px;
+	left: 300px;
+}
+
+#d3canvas {
+	width: 1000px;
+	height: 800px;
+	border: 1px solid #000;
+}
+
+#d3canvas text.labelpos {
+	font-size: 10px;
+	text-anchor: middle;
+}
+
+#d3canvas g.detail text {
+	font-size: 0.85em;
+}
+
+#d3canvas .correlation > .poslabel {
+	font-weight: 900;
+	text-anchor: middle;
+}
+
+#d3canvas .multiple > .poslabel {
+	font-weight: 400;
+	text-anchor: middle;
+	font-size: 0.8em;
+}
+
+/* indicate that you can click on stuff */
+#d3canvas .ipos, #d3canvas .multiple, #d3canvas .linkactive {
+	cursor: pointer;
+}
+
+#d3-sliders .slider-selection {
+	display: none;
+}
+
+#d3-sliders .slider-handle {
+	margin-left: -1px;
+	width: 2px;
+	border-radius: 0;
+}
+
+/* try doing svg sliders with d3
+   see <http://bl.ocks.org/mbostock/6452972> */
+   
+#d3canvas .axis {
+	font: 10px sans-serif;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	user-select: none;
+}
+
+#d3canvas .axis .domain {
+	fill: none;
+	stroke: #000;
+	stroke-opacity: .8;
+	stroke-width: 12px;
+	stroke-linecap: round;
+}
+
+#d3canvas .slider .handle {
+	fill: #fff;
+	stroke: #000;
+	stroke-opacity: .5;
+	stroke-width: 1.25px;
+	cursor: crosshair;
+}
+   
+/* old slider stuff */
+
+#depth-slider .slider-track  {
+	background: #f5f5f5 url('img/depth-bg.png') repeat-y left top;
+	background-size: 102%; /* stretch because source image is 98px instead of 100px */
+}
+
+#variant-slider .slider-track  {
+	background: #f5f5f5 url('img/variant-bg.png') repeat-y left top;
+	background-size: 102%; /* stretch because source image is 98px instead of 100px */
+}
+
+#metric-slider .slider-track  {
+	background: #f5f5f5 url('img/metric-bg.png') repeat-y left top;
+	background-size: 102%; /* stretch because source image is 98px instead of 100px */
+}
+
+/* d3-tip styles from github: 
+ * https://github.com/Caged/d3-tip/blob/master/examples/example-styles.css 
+ */
+.d3-tip {
+  line-height: 1;
+  font-weight: bold;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+/* Creates a small triangle extender for the tooltip */
+.d3-tip:after {
+  box-sizing: border-box;
+  display: inline;
+  font-size: 10px;
+  width: 100%;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.8);
+  position: absolute;
+  pointer-events: none;
+}
+
+/* Northward tooltips */
+.d3-tip.n:after {
+  content: "\25BC";
+  margin: -1px 0 0 0;
+  top: 100%;
+  left: 0;
+  text-align: center;
+}
+
+/* Eastward tooltips */
+.d3-tip.e:after {
+  content: "\25C0";
+  margin: -4px 0 0 0;
+  top: 50%;
+  left: -8px;
+}
+
+/* Southward tooltips */
+.d3-tip.s:after {
+  content: "\25B2";
+  margin: 0 0 1px 0;
+  top: -8px;
+  left: 0;
+  text-align: center;
+}
+
+/* Westward tooltips */
+.d3-tip.w:after {
+  content: "\25B6";
+  margin: -4px 0 0 -1px;
+  top: 50%;
+  left: 100%;
+}
