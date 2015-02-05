@@ -530,7 +530,8 @@ var checkFilterEntry = function(i, j) {
     return;
   }
     
-  // check for minimum depth; quit if failsvar minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
+  // check for minimum depth; quit if fails
+  var minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
   if (!curVal.hasOwnProperty('depth') || curVal.depth < minDepth) {
     console.warn("position (%d, %d) failed depth check: wanted %f% of %d (%d), found %d (%s%)",
       i, j, Math.floor(minDepthPercent * 100), metrics['bounds']['depth']['max'], minDepth, curVal.depth, (curVal.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2));
@@ -672,14 +673,14 @@ var makeSlider = function(type) {
     case 'depth':
       colors = depthScale.range();
       startVal = 25;
-      displayFunc = function(d) { return ">" + d + "%"; };
+      displayFunc = function(d) { return ">" + Math.round(d) + "%"; };
       sliderX = 150;
       dataDomain = [0, metrics.bounds.depth.max]; 
       break;
     case 'variant':
       colors = variantScale.range();
       startVal = 10;
-      displayFunc = function(d) { return ">" + d + "%"; };
+      displayFunc = function(d) { return ">" + Math.round(d) + "%"; };
       sliderX = 450;
       dataDomain = [0, 1];
       break;
@@ -741,13 +742,41 @@ var makeSlider = function(type) {
     .attr('class', 'slider')
     .call(brushes[type]);
     
+  // remove unused aspects of the brush, and modify the clickable area
   slider.selectAll('.extent,.resize').remove();
   slider.select('.background').attr('height', 20).attr('transform', 'translate(0,40)');
 
+  // add the circular handle
   var handle = slider.append('circle')
     .attr('class', 'handle')
     .attr('transform', 'translate(0,50)')
     .attr('r', 9);
+    
+  // add an indication of the current value
+  var sliderLabel = sliderGroup.append('g')
+    .attr('attr', 'slider-label')
+    .attr('transform', 'translate(0,12)');
+    
+  sliderLabel.append('line')
+    .attr({x1: 0, x2: 0, y1: 0, y2: 12 })
+    .style('stroke', '#fff')
+    .style('stroke-linecap', 'round')
+    .style('stroke-width', 5);
+    
+  sliderLabel.append('line')
+    .attr({x1: 0, x2: 0, y1: 0, y2: 12 })
+    .style('stroke', '#000')
+    .style('stroke-linecap', 'round')
+    .style('stroke-width', 1);
+    
+  var sliderText = sliderLabel.append('text')
+    .attr('class', 'slider-text')
+    .attr('x', 0)
+    .attr('y', 25)
+    .style('text-anchor', 'middle')
+    .style('font-size', '11px')
+    .style('font-weight', '800')
+    .text('TBD');
   
   // do bars now
   histoScales.x[type] = d3.scale.linear()
@@ -799,6 +828,10 @@ var makeSlider = function(type) {
     }
     
     handle.attr('cx', xScale(val));
+    
+    // update labels
+    sliderLabel.attr('transform', 'translate(' + xScale(val) + ',12)');
+    sliderText.text(displayFunc(val));
   };
   
   function brushended() {
@@ -1451,45 +1484,6 @@ $(document).ready(function() {
     
     checkHash();
   });
-
-  // set up sliders
-  $("#threshold-depth").slider({
-    tooltip: 'always',
-    formatter: function(val) { 
-      return ">" + val + "%";
-    }
-  });
   
-  $("#threshold-variants").slider({
-    tooltip: 'always',
-    formatter: function(val) { 
-      return ">" + val + "%";
-    }
-  });
-  
-  $("#threshold-metric").slider({
-    tooltip: 'always',
-    formatter: function(val) {
-      return ">abs(" + val + ")";
-    }
-  });
-  
-  var refilter = function() {
-    minDepthPercent = +$("#threshold-depth").val() / 100;
-    minVariants = +$("#threshold-variants").val() / 100;
-    minMetric = +$("#threshold-metric").val();
-      
-    filterData();
-    updateVis();
-  };
-  
-  $("#threshold-depth").on('slideStop', refilter);
-  $("#threshold-variants").on('slideStop', refilter);
-  $("#threshold-metric").on('slideStop', refilter);
-  
-  
-  console.log("done");
-  
-  
-  
+  // continueIfDone() will handle the rest once the files are loaded
 });
