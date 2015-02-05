@@ -232,7 +232,7 @@ svg .axis text {
 
 #d3loading {
 	border: 1px solid #000;
-	height: 800px;
+	height: 900px;
 	width: 1000px;
 	position: absolute;
 	left: 15px;
@@ -242,13 +242,13 @@ svg .axis text {
 }
 
 #d3loading #status {
-	top: 425px;
+	top: 475px;
 	left: 300px;
 }
 
 #d3canvas {
 	width: 1000px;
-	height: 800px;
+	height: 900px;
 	border: 1px solid #000;
 }
 
@@ -311,6 +311,10 @@ svg .axis text {
 	stroke-opacity: .5;
 	stroke-width: 1.25px;
 	cursor: crosshair;
+}
+
+#d3canvas .bar, #d3canvas .barVisible {
+	shape-rendering: crispEdges;
 }
    
 /* old slider stuff */

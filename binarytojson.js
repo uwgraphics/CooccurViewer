@@ -9,6 +9,14 @@ var ds = {
 var metrics = {};
 var filtered = {};
 
+// some sort of method to keep track of what the distribution of values looks like
+// (populate on loading data)
+var threshCounts = {
+  'depth': [],
+  'variant': [],
+  'metric': []
+};
+
 // parameters to filter on (eventually make these user-configurable)
 var minDepthPercent = 0.25;
 var minVariants = 0.1;
@@ -239,6 +247,8 @@ var makeBinaryFileRequest = function(filename, name) {
   xhr.send(null);
 };
 
+var brushes = {};
+var firstRun = true;
 var continueIfDone = function() {
   
   var theIs = Object.keys(metrics);
@@ -259,10 +269,102 @@ var continueIfDone = function() {
     return;
   }
   
+  // set a visibility field
+  Object.keys(metrics).forEach(function(curI) {
+    Object.keys(metrics[curI]).forEach(function(curJ) {
+      metrics[curI][curJ]['visible'] = false;
+    });
+  });
+  
+  // try doing the scales
+  collectStats();
+  makeSlider('depth');
+  makeSlider('variant');
+  makeSlider('metric');
+  
+  firstRun = false;
   filterData();
   updateVis();
 };
+
+var collectStats = function() {
+  // for each element, gather and save distributions of metrics
+  console.time('collecting stats');
   
+  var is = Object.keys(metrics);
+  is.forEach(function(curI) {
+    if (curI === 'bounds') return;
+    
+    var js = Object.keys(metrics[curI]);
+    js.forEach(function(curJ) {
+      var curPair = metrics[curI][curJ];
+      
+      if (curPair.hasOwnProperty('depth'))
+        threshCounts.depth.push(curPair.depth);
+      
+      if (curPair.hasOwnProperty('counts')) {
+        threshCounts.variant.push(
+          Math.min(
+            (curPair.counts[2] + curPair.counts[3]) / curPair.depth,
+            (curPair.counts[1] + curPair.counts[3]) / curPair.depth
+          )
+        );
+      }
+      
+      if (curPair.hasOwnProperty('metric'))
+        threshCounts.metric.push(Math.abs(curPair.metric));
+    });
+  });
+  
+  console.timeEnd('collecting stats');
+};  
+
+var flatMetrics = [];
+var tryCollectStats = function() {
+  console.time('trying new filtering');
+
+  flatMetrics = [];
+  
+  d3.keys(metrics).forEach(function(curI) {
+    d3.keys(metrics[curI]).forEach(function(curJ) {
+      // filter here
+      var curVal = metrics[curI][curJ];
+      if (!curVal.hasOwnProperty('depth') || !curVal.hasOwnProperty('counts') || !curVal.hasOwnProperty('metric'))
+        return;
+        
+      var minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
+      if (curVal.depth < minDepth) {
+        metrics[curI][curJ].visible = false;
+        return;
+      }
+      
+      var varLevel = (curVal.counts[2] + curVal.counts[3]) / curVal.depth;
+      if (varLevel < minVariants) {
+        metrics[curI][curJ].visible = false;
+        return;
+      }
+      
+      varLevel = (curVal.counts[1] + curVal.counts[3]) / curVal.depth;
+      if (varLevel < minVariants) {
+        metrics[curI][curJ].visible = false;
+        return;
+      }
+      
+      if (Math.abs(curVal.metric) < minMetric) {
+        metrics[curI][curJ].visible = false;
+        return;
+      }
+      
+      metrics[curI][curJ].visible = true;
+      
+      flatMetrics.push(metrics[curI][curJ]);
+    });
+  });
+  
+  console.timeEnd('trying new filtering');
+};
+
+var histoScales = {'x': {}, 'y': {}};
 var filterData = function() {
   
   // try to filter out anything that doesn't meet the following criteria
@@ -341,7 +443,69 @@ var filterData = function() {
   });
   
   console.timeEnd("filtering");
+  
   hideLoading();
+};
+
+binThresholds = {};
+var updateHistograms = function() { 
+  // update the histograms
+  tryCollectStats();
+  
+  ['metric', 'depth', 'variant'].forEach(function(type) {
+    // collect the data for this histogram
+    var typeVals = [];
+    switch (type) {
+      case 'metric':
+      case 'depth':
+        typeVals = flatMetrics.map(function(d) {
+          return d[type];
+        });
+        break;
+      case 'variant':
+        typeVals = flatMetrics.map(function(d) {
+          return Math.min(
+            (d.counts[2] + d.counts[3]) / d.depth,
+            (d.counts[1] + d.counts[3]) / d.depth
+          );
+        });
+        break;
+      default:
+        console.error('unknown type received when redrawing selected histogram bars');
+        return;
+    }
+    
+    var selBarData = d3.layout.histogram()
+      .bins(binThresholds[type])
+      (typeVals);
+  
+    var selBar = d3.select('.' + type + '-slider').select('.legend-bars').selectAll('.barVisible')
+      .data(selBarData);
+      
+    // ENTER  
+    var newBar = selBar.enter()
+      .append('g')
+        .attr('class', 'barVisible')
+        .attr('transform', function(d) {
+          return 'translate(' + histoScales.x[type](d.x) + ',' + histoScales.y[type](d.y) + ')';
+        });
+            
+    newBar.append('rect')
+      .attr('x', 1)
+      .attr('width', histoScales.x[type](selBarData[0].dx) - 1)
+      .style('fill', '#f00');
+      
+    // ENTER + UPDATE
+    selBar.attr('transform', function(d) {
+      return 'translate(' + histoScales.x[type](d.x) + ',' + histoScales.y[type](d.y) + ')';
+    });
+    
+    selBar.select('rect')
+      .attr('width', histoScales.x[type](selBarData[0].dx) - 1)
+      .attr('height', function(d) {
+        return 50 - histoScales.y[type](d.y);
+      });
+  });
 };
 
 var loadDataset = function(datasetName, datasetObj) {
@@ -366,7 +530,8 @@ var checkFilterEntry = function(i, j) {
     return;
   }
     
-  // check for minimum depth; quit if failsvar minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
+  // check for minimum depth; quit if fails
+  var minDepth = Math.floor(metrics['bounds']['depth']['max'] * minDepthPercent);
   if (!curVal.hasOwnProperty('depth') || curVal.depth < minDepth) {
     console.warn("position (%d, %d) failed depth check: wanted %f% of %d (%d), found %d (%s%)",
       i, j, Math.floor(minDepthPercent * 100), metrics['bounds']['depth']['max'], minDepth, curVal.depth, (curVal.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2));
@@ -500,28 +665,34 @@ var metricScale = d3.scale.quantize()
 var metricColorScale = d3.scale.quantize()
   .range(Array.prototype.slice.call(colorbrewer.RdBu[9]).reverse());
 
-
+var numBins = 7;
 var makeSlider = function(type) {
-  var colors, sliderX, displayFunc, startVal;
+  var colors, sliderX, displayFunc, startVal, dataDomain, sliderName;
   
   switch (type) {
     case 'depth':
       colors = depthScale.range();
       startVal = 25;
-      displayFunc = function(d) { return ">" + d + "%"; };
-      sliderX = 150;
+      displayFunc = function(d) { return ">" + Math.round(d) + "%"; };
+      sliderX = 125;
+      dataDomain = [0, metrics.bounds.depth.max]; 
+      sliderName = "Read Depth";
       break;
     case 'variant':
       colors = variantScale.range();
       startVal = 10;
-      displayFunc = function(d) { return ">" + d + "%"; };
+      displayFunc = function(d) { return ">" + Math.round(d) + "%"; };
       sliderX = 450;
+      dataDomain = [0, 1];
+      sliderName = "Variant %";
       break;
     case 'metric':
       colors = metricScale.range();
       startVal = 30;
       displayFunc = function(d) { return "> |" + (d / 100).toFixed(1) + "|"; };
-      sliderX = 750;
+      sliderX = 775;
+      dataDomain = [0, 1];
+      sliderName = "Co-occurrence Metric";
       break;
     default:
       console.error('got unknown type for slider');
@@ -529,10 +700,11 @@ var makeSlider = function(type) {
   }
   
   var xScale = d3.scale.linear().domain([0, 100]).range([0, 100]).clamp(true);
-  var brush = d3.svg.brush()
+  brushes[type] = d3.svg.brush()
     .x(xScale)
     .extent([0,0])
-    .on('brush', brushed);
+    .on('brush', brushed)
+    .on('brushend', brushended);
     
   // select the sliders group; create if it doesn't exist
   var sliders = d3.select("#d3canvas").selectAll('g.sliders').data([0]);
@@ -571,43 +743,146 @@ var makeSlider = function(type) {
       
   var slider = sliderParent.append('g')
     .attr('class', 'slider')
-    .call(brush);
+    .call(brushes[type]);
     
+  // remove unused aspects of the brush, and modify the clickable area
   slider.selectAll('.extent,.resize').remove();
   slider.select('.background').attr('height', 20).attr('transform', 'translate(0,40)');
 
+  // add the circular handle
   var handle = slider.append('circle')
     .attr('class', 'handle')
     .attr('transform', 'translate(0,50)')
     .attr('r', 9);
     
-  slider.call(brush.event).call(brush.extent([startVal,startVal])).call(brush.event);
+  // add the slider title
+  sliderGroup.append('text')
+    .attr('class', 'slider-name')
+    .attr('x', -15)
+    .attr('y', 4)
+    .style('text-anchor', 'end')
+    .style('font-size', '13px')
+    .text(sliderName);
+    
+  // add an indication of the current value
+  var sliderLabel = sliderGroup.append('g')
+    .attr('attr', 'slider-label')
+    .attr('transform', 'translate(0,12)');
+    
+  sliderLabel.append('line')
+    .attr({x1: 0, x2: 0, y1: 0, y2: 12 })
+    .style('stroke', '#fff')
+    .style('stroke-linecap', 'round')
+    .style('stroke-width', 5);
+    
+  sliderLabel.append('line')
+    .attr({x1: 0, x2: 0, y1: 0, y2: 12 })
+    .style('stroke', '#000')
+    .style('stroke-linecap', 'round')
+    .style('stroke-width', 1);
+    
+  var sliderText = sliderLabel.append('text')
+    .attr('class', 'slider-text')
+    .attr('x', 0)
+    .attr('y', 25)
+    .style('text-anchor', 'middle')
+    .style('font-size', '11px')
+    .style('font-weight', '800')
+    .text('TBD');
+  
+  // do bars now
+  histoScales.x[type] = d3.scale.linear()
+    .domain(dataDomain)
+    .range([0, 100]);
+    
+  var barGroup = sliderParent.append('g')
+    .attr('class', 'legend-bars')
+    .attr('transform', 'translate(0,-10)');
+  
+  // compute thresholds for histogram binning
+  // thanks to <http://stackoverflow.com/questions/20367899/d3-js-controlling-ticks-and-bins-on-a-histogram>
+  var tempScale = d3.scale.linear()
+    .domain([0,numBins])
+    .range(dataDomain);
+  binThresholds[type] = d3.range(numBins+1).map(tempScale);
+  
+  var barData = d3.layout.histogram()
+    .bins(binThresholds[type])
+    (threshCounts[type]);
+  
+  histoScales.y[type] = d3.scale.linear()
+    .domain([0, d3.max(barData, function(d) { return d.y; })])
+    .range([50, 0]);
+    
+  var bar = barGroup.selectAll('.bar')
+    .data(barData)
+      .enter().append('g')
+        .attr('class', 'bar')
+        .attr('transform', function(d) {
+          return 'translate(' + histoScales.x[type](d.x) + ',' + histoScales.y[type](d.y) + ')';
+        });
+        
+  bar.append('rect')
+    .attr('x', 1)
+    .attr('width', histoScales.x[type](barData[0].dx) - 1)
+    .attr('height', function(d) {
+      return 50 - histoScales.y[type](d.y);
+    });
+    
+  // finally, call the slider events to set everything up
+  slider.call(brushes[type].extent([startVal,startVal])).call(brushes[type].event);
   
   function brushed() {
-    var val = brush.extent()[0];
+    var val = brushes[type].extent()[0];
     if (d3.event.sourceEvent) {  // e.g. not a programmatic event
       val = xScale.invert(d3.mouse(this)[0]);
-      brush.extent([val, val]);
+      brushes[type].extent([val, val]);
     }
     
     handle.attr('cx', xScale(val));
-    window.alert('got value from ' + type + ': ' + val);
+    
+    // update labels
+    sliderLabel.attr('transform', 'translate(' + xScale(val) + ',12)');
+    sliderText.text(displayFunc(val));
+  };
+  
+  function brushended() {
+    var val = brushes[type].extent()[0];
+    if (d3.event.sourceEvent) {  // e.g. not a programmatic event
+      val = xScale.invert(d3.mouse(this)[0]);
+      brushes[type].extent([val, val]);
+    }
+    
+    if (!firstRun) {
+      switch (type) {
+        case 'metric':
+          minMetric = histoScales.x[type].invert(val);
+          break;
+        case 'variant':
+          minVariants = histoScales.x[type].invert(val);
+          break;
+        case 'depth':
+          var depthThresh = histoScales.x[type].invert(val);
+          minDepthPercent = depthThresh / metrics.bounds.depth.max;
+          break;
+      }
+      
+      filterData();
+      updateVis();
+    }
   };
 };
-
-// try doing the scales
-/* !!!! TODO: skip making these in SVG for now (see d3_histo branch)
-makeSlider('depth');
-makeSlider('variant');
-makeSlider('metric');
-*/
 
 var detailScales = {};
 var detailData = [];    
 
 var updateVis = function() { 
+  // update histograms
+  updateHistograms();
+
   // do the brain-dead thing and just wipe everything
   overview.selectAll('g.ipos').remove();
+  detailView.selectAll('*').remove();
   
   // set domains that depend on bounds of data
   metricColorScale.domain([
@@ -1221,45 +1496,6 @@ $(document).ready(function() {
     
     checkHash();
   });
-
-  // set up sliders
-  $("#threshold-depth").slider({
-    tooltip: 'always',
-    formatter: function(val) { 
-      return ">" + val + "%";
-    }
-  });
   
-  $("#threshold-variants").slider({
-    tooltip: 'always',
-    formatter: function(val) { 
-      return ">" + val + "%";
-    }
-  });
-  
-  $("#threshold-metric").slider({
-    tooltip: 'always',
-    formatter: function(val) {
-      return ">abs(" + val + ")";
-    }
-  });
-  
-  var refilter = function() {
-    minDepthPercent = +$("#threshold-depth").val() / 100;
-    minVariants = +$("#threshold-variants").val() / 100;
-    minMetric = +$("#threshold-metric").val();
-      
-    filterData();
-    updateVis();
-  };
-  
-  $("#threshold-depth").on('slideStop', refilter);
-  $("#threshold-variants").on('slideStop', refilter);
-  $("#threshold-metric").on('slideStop', refilter);
-  
-  
-  console.log("done");
-  
-  
-  
+  // continueIfDone() will handle the rest once the files are loaded
 });
