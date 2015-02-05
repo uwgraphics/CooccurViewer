@@ -667,15 +667,16 @@ var metricColorScale = d3.scale.quantize()
 
 var numBins = 7;
 var makeSlider = function(type) {
-  var colors, sliderX, displayFunc, startVal, dataDomain;
+  var colors, sliderX, displayFunc, startVal, dataDomain, sliderName;
   
   switch (type) {
     case 'depth':
       colors = depthScale.range();
       startVal = 25;
       displayFunc = function(d) { return ">" + Math.round(d) + "%"; };
-      sliderX = 150;
+      sliderX = 125;
       dataDomain = [0, metrics.bounds.depth.max]; 
+      sliderName = "Read Depth";
       break;
     case 'variant':
       colors = variantScale.range();
@@ -683,13 +684,15 @@ var makeSlider = function(type) {
       displayFunc = function(d) { return ">" + Math.round(d) + "%"; };
       sliderX = 450;
       dataDomain = [0, 1];
+      sliderName = "Variant %";
       break;
     case 'metric':
       colors = metricScale.range();
       startVal = 30;
       displayFunc = function(d) { return "> |" + (d / 100).toFixed(1) + "|"; };
-      sliderX = 750;
+      sliderX = 775;
       dataDomain = [0, 1];
+      sliderName = "Co-occurrence Metric";
       break;
     default:
       console.error('got unknown type for slider');
@@ -751,6 +754,15 @@ var makeSlider = function(type) {
     .attr('class', 'handle')
     .attr('transform', 'translate(0,50)')
     .attr('r', 9);
+    
+  // add the slider title
+  sliderGroup.append('text')
+    .attr('class', 'slider-name')
+    .attr('x', -15)
+    .attr('y', 4)
+    .style('text-anchor', 'end')
+    .style('font-size', '13px')
+    .text(sliderName);
     
   // add an indication of the current value
   var sliderLabel = sliderGroup.append('g')
