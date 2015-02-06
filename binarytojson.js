@@ -23,6 +23,8 @@ var minVariants = 0.1;
 var minVarJ = true;
 var minMetric = 0.3;
 
+var doHistograms = false;
+
 // JSON object to hold the 2x2 matrix of counts for each pair of positions
 var counts = {};
 
@@ -277,7 +279,7 @@ var continueIfDone = function() {
   });
   
   // try doing the scales
-  collectStats();
+  if (doHistograms) collectStats();
   makeSlider('depth');
   makeSlider('variant');
   makeSlider('metric');
@@ -449,6 +451,8 @@ var filterData = function() {
 
 binThresholds = {};
 var updateHistograms = function() { 
+  if (!doHistograms) return;
+  
   // update the histograms
   tryCollectStats();
   
@@ -790,44 +794,47 @@ var makeSlider = function(type) {
     .style('font-weight', '800')
     .text('TBD');
   
-  // do bars now
-  histoScales.x[type] = d3.scale.linear()
-    .domain(dataDomain)
-    .range([0, 100]);
+  // do base histogram bars now
+  if (doHistograms) {
+    histoScales.x[type] = d3.scale.linear()
+      .domain(dataDomain)
+      .range([0, 100]);
+      
+    var barGroup = sliderParent.append('g')
+      .attr('class', 'legend-bars')
+      .attr('transform', 'translate(0,-10)');
     
-  var barGroup = sliderParent.append('g')
-    .attr('class', 'legend-bars')
-    .attr('transform', 'translate(0,-10)');
-  
-  // compute thresholds for histogram binning
-  // thanks to <http://stackoverflow.com/questions/20367899/d3-js-controlling-ticks-and-bins-on-a-histogram>
-  var tempScale = d3.scale.linear()
-    .domain([0,numBins])
-    .range(dataDomain);
-  binThresholds[type] = d3.range(numBins+1).map(tempScale);
-  
-  var barData = d3.layout.histogram()
-    .bins(binThresholds[type])
-    (threshCounts[type]);
-  
-  histoScales.y[type] = d3.scale.linear()
-    .domain([0, d3.max(barData, function(d) { return d.y; })])
-    .range([50, 0]);
+    // compute thresholds for histogram binning
+    // thanks to <http://stackoverflow.com/questions/20367899/d3-js-controlling-ticks-and-bins-on-a-histogram>
+    var tempScale = d3.scale.linear()
+      .domain([0,numBins])
+      .range(dataDomain);
+    binThresholds[type] = d3.range(numBins+1).map(tempScale);
     
-  var bar = barGroup.selectAll('.bar')
-    .data(barData)
-      .enter().append('g')
-        .attr('class', 'bar')
-        .attr('transform', function(d) {
-          return 'translate(' + histoScales.x[type](d.x) + ',' + histoScales.y[type](d.y) + ')';
-        });
-        
-  bar.append('rect')
-    .attr('x', 1)
-    .attr('width', histoScales.x[type](barData[0].dx) - 1)
-    .attr('height', function(d) {
-      return 50 - histoScales.y[type](d.y);
-    });
+    var barData = d3.layout.histogram()
+      .bins(binThresholds[type])
+      (threshCounts[type]);
+    
+    histoScales.y[type] = d3.scale.linear()
+      .domain([0, d3.max(barData, function(d) { return d.y; })])
+      .range([50, 0]);
+      
+    var bar = barGroup.selectAll('.bar')
+      .data(barData)
+        .enter().append('g')
+          .attr('class', 'bar')
+          .attr('transform', function(d) {
+            return 'translate(' + histoScales.x[type](d.x) + ',' + histoScales.y[type](d.y) + ')';
+          });
+          
+    bar.append('rect')
+      .attr('x', 1)
+      .attr('width', histoScales.x[type](barData[0].dx) - 1)
+      .attr('height', function(d) {
+        return 50 - histoScales.y[type](d.y);
+      });
+      
+  }
     
   // finally, call the slider events to set everything up
   slider.call(brushes[type].extent([startVal,startVal])).call(brushes[type].event);
@@ -856,7 +863,7 @@ var makeSlider = function(type) {
     if (!firstRun) {
       switch (type) {
         case 'metric':
-          minMetric = histoScales.x[type].invert(val);
+          minMetric = val / 100;
           break;
         case 'variant':
           minVariants = histoScales.x[type].invert(val);
@@ -878,7 +885,7 @@ var detailData = [];
 
 var updateVis = function() { 
   // update histograms
-  updateHistograms();
+  if (doHistograms) updateHistograms();
 
   // do the brain-dead thing and just wipe everything
   overview.selectAll('g.ipos').remove();
@@ -1458,6 +1465,7 @@ $(document).ready(function() {
       // remove all data from the canvas
       d3.select("#d3canvas .overview").selectAll("*").remove();
       d3.select("#d3canvas .detail").selectAll("*").remove();
+      d3.select("#d3canvas .sliders").selectAll("*").remove();
       metrics = {};
     
       var curDataset;
@@ -1495,6 +1503,19 @@ $(document).ready(function() {
     }
     
     checkHash();
+  });
+  
+  doHistograms = $("#dostats").prop('checked');
+  $("#dostats").change(function() {
+    doHistograms = $("#dostats").prop('checked');
+
+    // remove all data from the canvas
+    d3.select("#d3canvas .overview").selectAll("*").remove();
+    d3.select("#d3canvas .detail").selectAll("*").remove();
+    d3.select("#d3canvas .sliders").selectAll("*").remove();
+    
+    // draw the visualization from scratch
+    continueIfDone();
   });
   
   // continueIfDone() will handle the rest once the files are loaded
