@@ -279,7 +279,11 @@ var continueIfDone = function() {
   });
   
   // try doing the scales
-  if (doHistograms) collectStats();
+  if (doHistograms) {
+    collectStats();
+    tryCollectStats();
+  } 
+  
   makeSlider('depth');
   makeSlider('variant');
   makeSlider('metric');
@@ -866,11 +870,10 @@ var makeSlider = function(type) {
           minMetric = val / 100;
           break;
         case 'variant':
-          minVariants = histoScales.x[type].invert(val);
+          minVariants = val / 100;
           break;
         case 'depth':
-          var depthThresh = histoScales.x[type].invert(val);
-          minDepthPercent = depthThresh / metrics.bounds.depth.max;
+          minDepthPercent = val / 100; 
           break;
       }
       
@@ -1515,6 +1518,7 @@ $(document).ready(function() {
     d3.select("#d3canvas .sliders").selectAll("*").remove();
     
     // draw the visualization from scratch
+    firstRun = true;
     continueIfDone();
   });
   
