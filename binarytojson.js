@@ -259,16 +259,28 @@ var continueIfDone = function() {
   if (theIs.length == 0)
     return;
     
-  // get an arbitrary index to play with
-  var i = theIs[Math.floor(Math.random() * theIs.length)];
+  // it's possible that metric might be 'null' or not present if the co-occurrence value is zero.
+  // try a bunch of random values until we find one that is not or where we expect the co-occurrence
+  // value to not be zero (e.g. counts[1] + counts[2] + counts[3] != 0)
+  while (true) {
+     // get an arbitrary index to play with
+    var i = theIs[Math.floor(Math.random() * theIs.length)];
+
+    var theJs = Object.keys(metrics[i]);
+    var j = theJs[Math.floor(Math.random() * theJs.length)];
+    
+    var curVal = metrics[i][j];
   
-  var theJs = Object.keys(metrics[i]);
-  var j = theJs[Math.floor(Math.random() * theJs.length)];
-  
-  var curVal = metrics[i][j];
-  if (!curVal.hasOwnProperty('metric') || !curVal.hasOwnProperty('depth') || !curVal.hasOwnProperty('counts')) {
-    console.log("still missing fields (" + i + ", " + j + ") .. waiting");
-    return;
+    if (!curVal.hasOwnProperty('depth') || !curVal.hasOwnProperty('counts'))
+      return;
+      
+    // metric should only be missing if no variants at either position (assume metric isn't loaded yet)
+    if (!curVal.hasOwnProperty('metric') && curVal.depth != curVal.counts[0])
+      return;
+      
+    // break out if we found a metric property
+    if (curVal.hasOwnProperty('metric'))
+      break;
   }
   
   // set a visibility field

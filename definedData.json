@@ -39,27 +39,38 @@
       "numReads": 15,
       "origData": "sampledata.sam"
     },
-	"VHA4_P11_F21_DPI3-ref": {
+    "VHA4_P11_F21_DPI3-ref": {
       "attenuation": "readBreadth.dat",
       "metrics": ["conjProbDiff.dat"],
-	  "variantCounts": "variantCounts.dat",
+      "variantCounts": "variantCounts.dat",
       "numPos": 2500,
       "numReads": 258000,
       "origData": "VHA4_SHA_P11_F21_DPI3_R1_I18_C21.sam",
-	  "reference": "VN1203-HA.fa.txt"	  
-	},
-	"VHA3_P1_F991_DPI3-ref": {
+      "reference": "VN1203-HA.fa.txt"      
+    },
+    "VHA3_P1_F991_DPI3-ref": {
       "attenuation": "readBreadth.dat",
       "metrics": [
-		"conjProbDiff.dat",
-		"conjProbDiff-ratio.dat",
-		"conjProbDiff-outliers.dat"
+        "conjProbDiff.dat",
+        "conjProbDiff-ratio.dat",
+        "conjProbDiff-outliers.dat"
       ],
-	  "variantCounts": "variantCounts.dat",
+      "variantCounts": "variantCounts.dat",
       "numPos": 2500,
       "numReads": 223000,
       "origData": "VHA3_SHA_P1_F991_DPI3_R1_I23_C27.sam",
-	  "reference": "VN1203-HA.fa.txt"	  
-	}
+      "reference": "VN1203-HA.fa.txt"      
+    },
+    "SIV": {
+      "attenuation": "readBreadth.dat",
+      "metrics": [
+        "conjProbDiff.dat"
+      ],
+      "variantCounts": "variantCounts.dat",
+      "numPos": 10600,
+      "numReads": 283400,
+      "origData": "CY0334_54wk_Contig.bam",
+      "reference": "CY0334_54wk_Contig.fasta"    
+    }
   }
 }
