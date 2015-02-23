@@ -430,8 +430,8 @@ var filterData = function() {
       if (!curVal.hasOwnProperty('metric') || Math.abs(curVal.metric) < minMetric)
         return;
         
-      curVal.posi = i;
-      curVal.posj = j;
+      curVal.posi = +i;
+      curVal.posj = +j;
         
       // if all other checks pass, copy to filtered
       // search if this i already exists: add if not, append to existing if so
@@ -667,7 +667,7 @@ y.rangeBand = function() { return 200; }; // hack to keep d3 paradigm
   
 var miniBarY = d3.scale.ordinal()
   .domain(['depth', 'variant', 'metric'])
-  .rangeBands([0,100], 0.1);
+  .rangeBands([50,100], 0.1);
   
 var miniBarHeight = 100;
   
@@ -684,6 +684,13 @@ var metricScale = d3.scale.quantize()
   
 var metricColorScale = d3.scale.quantize()
   .range(Array.prototype.slice.call(colorbrewer.RdBu[9]).reverse());
+  
+var seqScale = d3.scale.linear()
+  .range([0, 940]);
+  
+var seqAxis = d3.svg.axis() 
+  .ticks(10)
+  .orient('top');
 
 var numBins = 7;
 var makeSlider = function(type) {
@@ -912,6 +919,18 @@ var updateVis = function() {
     metrics.bounds.metric.max
   ]);
   depthScale.domain([metrics.bounds.depth.min, metrics.bounds.depth.max]);
+  
+  seqScale.domain(d3.extent(Object.keys(metrics).map(function(d) { return +d; })));
+  seqAxis.scale(seqScale);
+
+  // add the axis if it doesn't exist
+  var seqAxisGrp = overview.selectAll('g.seqAxis').data([seqScale.domain()]);
+  
+  seqAxisGrp.enter()
+    .append('g')
+      .attr('class', 'x axis seqAxis')
+      .call(seqAxis);
+  seqAxisGrp.exit().remove();
 
   // assume that filtered is populated here
   var ipos = overview.selectAll('g.ipos')
@@ -980,9 +999,57 @@ var updateVis = function() {
     
   newPos.append('text')
     .attr('class', 'labelpos')
-    .attr('x', x.rangeBand() / 2)
-    .attr('y', miniBarHeight + 15)
+    .attr('x', x.rangeBand() * 2 / 3)
+    .attr('y', miniBarHeight + 7)
+    .style('text-anchor', 'end')
+    .attr('transform', 'rotate(-65,' + (x.rangeBand() * 2 / 3) + ',' + (miniBarHeight+7) + ')')
     .text(function(d) { return d.pos; });
+  
+  newPos.append('line')
+    .attr('x1', x.rangeBand() / 2)
+    .attr('y1', 50)
+    .attr('x2', function(d) {
+      return seqScale(d.pos) - x(d.pos);
+    })
+    .attr('y2', 0)
+    .attr('stroke', '#000')
+    .attr('stroke-width', 1);
+    //.attr('shape-rendering', 'crispEdges');
+    
+  // try to append some shapes on the axis ??
+  newPos.append('rect')
+    .attr('x', function(d) { 
+      return seqScale(d.pos) - x(d.pos) - 1;
+    })
+    .attr('y', -4)
+    .attr('height', 4)
+    .attr('width', 2)
+    .style('fill', function(d) {
+      var imax = d3.max(d.relatedPairs, function(e) {
+        return (e.counts[2] + e.counts[3]) / e.depth;
+      });
+      
+      var jmax = d3.max(d.relatedPairs, function(e) {
+        return (e.counts[1] + e.counts[3]) / e.depth;
+      });
+      
+      return variantScale(Math.max(imax, jmax));
+    });
+    
+  newPos.append('rect')
+    .attr('x', function(d) { 
+      return seqScale(d.pos) - x(d.pos) - 1;
+    })
+    .attr('y', -8)
+    .attr('height', 4)
+    .attr('width', 2)
+    .style('fill', function(d) {
+      return metricScale(
+        d3.max(d.relatedPairs, function(e) { 
+          return Math.abs(e.metric); 
+        })
+      );
+    });
   
   // ENTER + UPDATE STEP
   
@@ -1222,6 +1289,19 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
   width = width || 350;
   height = height || y.rangeBand();
   percentRectWidth = percentRectWidth || 0.1;
+  
+  // figure out whether we should flip (keep lower position on the left)
+  parentGrp.attr('transform', function(d) {
+    var preTranslate = d3.select(this).attr('transform');
+    if (d.posj > d.posi) {
+      if (preTranslate)
+        return preTranslate + 'translate(' + width + ',0)scale(-1,1)';
+      else
+        return 'translate(' + width + ',0)scale(-1,1)';
+    } else {
+      return preTranslate;
+    }
+  });
 
   // initialize the detail scales and 
   // draw two blocks
@@ -1318,12 +1398,20 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     .attr('class', 'poslabel')
     .attr('x', Math.floor(rectW / 2))
     .attr('y', height + 20)
+    .attr('transform', function(d) {
+      if (d.posj > d.posi)
+        return 'translate(' + (2 * (Math.floor(rectW / 2))) + ',0)scale(-1,1)';
+    })
     .text(function(d) { return d.posj; });  
     
   parentGrp.append('text')
     .attr('class', 'poslabel')
     .attr('x', width - Math.ceil(rectW / 2))
     .attr('y', height + 20)
+    .attr('transform', function(d) {
+      if (d.posj > d.posi)
+        return 'translate(' + (2 * (width - Math.ceil(rectW / 2))) + ',0)scale(-1,1)';
+    })
     .text(function(d) { return d.posi; });
 
   // path-specific coordinates

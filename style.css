@@ -272,6 +272,14 @@ svg .axis text {
 	font-size: 0.8em;
 }
 
+#d3canvas .seqAxis > * {
+	stroke-width: 2;
+}
+
+#d3canvas .ipos:hover line {
+	stroke: #f00;
+}
+
 /* indicate that you can click on stuff */
 #d3canvas .ipos, #d3canvas .multiple, #d3canvas .linkactive {
 	cursor: pointer;
@@ -290,14 +298,14 @@ svg .axis text {
 /* try doing svg sliders with d3
    see <http://bl.ocks.org/mbostock/6452972> */
    
-#d3canvas .axis {
+#d3canvas .sliders .axis {
 	font: 10px sans-serif;
 	-webkit-user-select: none;
 	-moz-user-select: none;
 	user-select: none;
 }
 
-#d3canvas .axis .domain {
+#d3canvas .sliders .axis .domain {
 	fill: none;
 	stroke: #000;
 	stroke-opacity: .8;
