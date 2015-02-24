@@ -276,8 +276,12 @@ svg .axis text {
 	stroke-width: 2;
 }
 
-#d3canvas .ipos:hover line {
-	stroke: #f00;
+#d3canvas .wedge {
+	fill: #333;
+}
+
+#d3canvas .wedge .selected {
+	fill: #f00;
 }
 
 /* indicate that you can click on stuff */

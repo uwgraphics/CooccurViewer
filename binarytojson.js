@@ -271,12 +271,19 @@ var continueIfDone = function() {
     
     var curVal = metrics[i][j];
   
-    if (!curVal.hasOwnProperty('depth') || !curVal.hasOwnProperty('counts'))
+    if (!curVal.hasOwnProperty('depth') || !curVal.hasOwnProperty('counts')) {
+      console.log("failed to find 'depth' or 'counts', waiting...");
       return;
+    }
       
     // metric should only be missing if no variants at either position (assume metric isn't loaded yet)
-    if (!curVal.hasOwnProperty('metric') && curVal.depth != curVal.counts[0])
+    if (!curVal.hasOwnProperty('metric') && curVal.depth != curVal.counts[0]) {
+      if (curVal.depth == curVal.counts[0])
+        continue;
+        
+      console.log("failed to find a metric when one was expected, waiting...");
       return;
+    }
       
     // break out if we found a metric property
     if (curVal.hasOwnProperty('metric'))
@@ -902,6 +909,46 @@ var makeSlider = function(type) {
   };
 };
 
+// assumes seqScale is populated with a domain
+var clusters = [];
+var clusterAssignment = {};
+var clusterDist = 3;
+var clusterPositions = function() {
+  positions = filtered.map(function(d) { return +d.pos; });
+  
+  // reset the clusters
+  clusters = [];
+  clusterAssignment = {};
+  
+  var cluster = -1;
+  var prevPos = -10;
+  for (var i = 0; i < positions.length; i++) {
+    var thisSeq = positions[i];
+    var thisPos = seqScale(thisSeq);
+    
+    if (thisPos < prevPos + 3) {
+      clusters[cluster]['max'] = thisSeq;
+      clusterAssignment[thisSeq] = cluster;
+    } else {
+      clusters[++cluster] = {};
+      clusters[cluster]['min'] = thisSeq;
+      clusters[cluster]['max'] = thisSeq;
+      clusterAssignment[thisSeq] = cluster;
+    }
+    
+    prevPos = thisPos;
+  }
+  
+  // augment the x domain with gaps between clusters
+  var thisDomain = x.domain();
+  clusters.forEach(function(d, i) {
+    if (i == clusters.length - 1) return;
+    thisDomain.splice(thisDomain.indexOf(d.max) + 1, 0, 'cluster' + i);
+  });
+  
+  x.domain(thisDomain);
+};
+
 var detailScales = {};
 var detailData = [];    
 
@@ -911,6 +958,7 @@ var updateVis = function() {
 
   // do the brain-dead thing and just wipe everything
   overview.selectAll('g.ipos').remove();
+  overview.selectAll('g.wedge').remove();
   detailView.selectAll('*').remove();
   
   // set domains that depend on bounds of data
@@ -938,6 +986,8 @@ var updateVis = function() {
     
   // set the x domain
   x.domain(filtered.map(function(d) { return d.pos; }));
+  
+  clusterPositions();
     
   // ENTER STEP
   var newPos = ipos.enter()
@@ -950,8 +1000,14 @@ var updateVis = function() {
         detailData = filtered[i].relatedPairs;
         updateDetail();
       })
-      .on('mouseover', tip.show)
-      .on('mouseout', tip.hide);
+      .on('mouseover', function(d) {
+        d3.select('.cluster' + clusterAssignment[d.pos]).classed('selected', true);
+        tip.show(d);
+      })
+      .on('mouseout', function(d) {
+        d3.select('.cluster' + clusterAssignment[d.pos]).classed('selected', false);
+        tip.hide(d);
+      });
       
   var barHeight = 20;
   
@@ -997,24 +1053,35 @@ var updateVis = function() {
       );
     });
     
+  // be smart about when we diagonalize (when we have less than 20px space)
+  var widthLimit = 25;
   newPos.append('text')
     .attr('class', 'labelpos')
-    .attr('x', x.rangeBand() * 2 / 3)
-    .attr('y', miniBarHeight + 7)
-    .style('text-anchor', 'end')
-    .attr('transform', 'rotate(-65,' + (x.rangeBand() * 2 / 3) + ',' + (miniBarHeight+7) + ')')
-    .text(function(d) { return d.pos; });
-  
-  newPos.append('line')
-    .attr('x1', x.rangeBand() / 2)
-    .attr('y1', 50)
-    .attr('x2', function(d) {
-      return seqScale(d.pos) - x(d.pos);
+    .attr('x', function() { 
+      if (x.rangeBand() >= widthLimit) 
+        return x.rangeBand() / 2;
+      else
+        return x.rangeBand() * 2 / 3;
     })
-    .attr('y2', 0)
-    .attr('stroke', '#000')
-    .attr('stroke-width', 1);
-    //.attr('shape-rendering', 'crispEdges');
+    .attr('y', function() {
+      if (x.rangeBand() >= widthLimit)
+        return miniBarHeight + 15;
+      else 
+        return miniBarHeight + 7;
+    })
+    .style('text-anchor', function() {
+      if (x.rangeBand() >= widthLimit)
+        return 'middle';
+      else 
+        return 'end';
+    })
+    .attr('transform', function() {
+      if (x.rangeBand() >= widthLimit)
+        return null;
+      else 
+        return 'rotate(-65,' + (x.rangeBand() * 2 / 3) + ',' + (miniBarHeight+7) + ')';
+    })
+    .text(function(d) { return d.pos; });
     
   // try to append some shapes on the axis ??
   newPos.append('rect')
@@ -1051,10 +1118,34 @@ var updateVis = function() {
       );
     });
   
-  // ENTER + UPDATE STEP
-  
-  
-  // EXIT STEP
+  // make wedges
+  var newWedges = overview.selectAll('g.wedge')
+    .data(clusters, function(d) { return d.min + "," + d.max;})
+    .enter()
+      .append("g")
+        .attr('class', 'wedge');
+        
+  newWedges.append('path')
+    .attr('d', function(d) { 
+      var path = "";
+      if (d.min != d.max) {
+        path = "M " + (x(d.min) + x.rangeBand() / 2) + " 50";
+        path += " L " + (x(d.max) + x.rangeBand() / 2) + " 50";
+        path += " L " + seqScale(d.max) + " 0";
+        path += " L " + seqScale(d.min) + " 0";
+      } else {
+        path = "M " + (x(d.min) + 1 * x.rangeBand() / 4) + " 50";
+        path += " L " + (x(d.min) + 3 * x.rangeBand() / 4) + " 50";
+        path += " L " + (seqScale(d.min) + x.rangeBand() / 4) + " 0";
+        path += " L " + (seqScale(d.min) - x.rangeBand() / 4) + " 0";
+      }
+        
+      return path;
+    })
+    .attr('class', function(d, i) {
+      return 'cluster' + i;
+    });
+    
   
   hideLoading();
 };
