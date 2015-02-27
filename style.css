@@ -39,6 +39,17 @@ canvas {
 	width: 400px;
 }
 
+.progs {
+	text-align: right;
+	margin-top: 20px;
+	margin-right: 40px;
+}
+
+.progValue {
+	display: inline-block;
+	width: 40px;
+}
+
 #img-container img {
 	display: none;
 	margin: 20px auto;

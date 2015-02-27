@@ -47,7 +47,7 @@ var loadBinaryData = function(data, name) {
   ready = false;
 
   console.time("parsing file " + name);
-  updateLoadingStatus("parsing " + name + " file...");
+  //updateLoadingStatus("parsing " + name + " file...");
 
   var dv = new DataView(data);
 
@@ -78,7 +78,7 @@ var loadBinaryData = function(data, name) {
 
   // do a bunch of error checking (also serves as documentation)
   if (ds.numPos && ds.numPos != thisNumPos) {
-    console.warn("number of lines in file %s does not match data: expected %d, depth had %d lines", name, ds.numWindow, thisNumWindow);
+    console.warn("number of lines in file %s does not match data: expected %d, depth had %d lines", name, ds.numPos, thisNumPos);
   }
 
   if (ds.numWindow && ds.numWindow != thisNumWindow) {
@@ -221,8 +221,20 @@ var loadBinaryData = function(data, name) {
   }
 
   console.timeEnd("parsing file " + name);
-  updateLoadingStatus("collecting data...");
   continueIfDone();
+};
+
+var updateProgress = function(name) {
+  return function(e) {
+    if (e.lengthComputable) {
+      var val = Math.round(e.loaded / e.total * 100);
+      $("#" + name + "Prog").val(val);
+      $("#" + name + "ProgVal").html(val + "%");
+    } else {
+      $("#" + name + "Prog").val();
+      $("#" + name + "ProgVal").html("N/A");
+    }
+  };
 };
 
 var makeBinaryFileRequest = function(filename, name) {
@@ -237,6 +249,8 @@ var makeBinaryFileRequest = function(filename, name) {
   xhr.open('GET', filename, true);
   xhr.responseType = 'arraybuffer';
 
+  xhr.addEventListener('progress', updateProgress(name), false);
+  
   xhr.addEventListener('load', function() {
     if (xhr.status == 200) {
       loadBinaryData(xhr.response, name);
@@ -296,6 +310,8 @@ var continueIfDone = function() {
       metrics[curI][curJ]['visible'] = false;
     });
   });
+  
+  updateLoadingStatus("collecting data...");
   
   // try doing the scales
   if (doHistograms) {
@@ -528,17 +544,32 @@ var updateHistograms = function() {
     });
     
     selBar.select('rect')
-      .attr('width', histoScales.x[type](selBarData[0].dx) - 1)
+      .attr('width', histoScales.x[type](selBarData[0].dx) - 1) 
       .attr('height', function(d) {
         return 50 - histoScales.y[type](d.y);
       });
   });
 };
 
+var progressStatus = '<div class="progs">' +
+  '<span id="depthStatus">Loading Depth</span>: ' +
+  '<progress value="0" max="100" id="depthProg"></progress> ' +
+  '<span class="progValue" id="depthProgVal">0%</span><br />' +
+  '<span id="countsStatus">Loading Counts</span>: ' +
+  '<progress value="0" max="100" id="countsProg"></progress> ' +
+  '<span class="progValue" id="countsProgVal">0%</span><br />' +
+  '<span id="metricStatus">Loading Metric</span>: ' +
+  '<progress value="0" max="100" id="metricProg"></progress> ' +
+  '<span class="progValue" id="metricProgVal">100%</span>' +
+  '</div>';
 var loadDataset = function(datasetName, datasetObj) {
   var dataDir = "data/" + datasetName + "/";
 
-  updateLoadingStatus("loading dataset " + datasetName);
+  updateLoadingStatus("loading dataset " + datasetName + "<br />" + progressStatus);
+  
+  // reset dataset counts/parameters;
+  ds.numPos = 0;
+  ds.numWindow = 0;
   
   makeBinaryFileRequest(dataDir + datasetObj.attenuation, 'depth');
   makeBinaryFileRequest(dataDir + datasetObj.variantCounts, 'counts');
