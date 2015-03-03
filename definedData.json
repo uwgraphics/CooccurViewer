@@ -67,6 +67,7 @@
         "conjProbDiff.dat"
       ],
       "variantCounts": "variantCounts.dat",
+      "annotations": "sivmac239_proteins.json",
       "numPos": 10600,
       "numReads": 283400,
       "origData": "CY0334_54wk_Contig.bam",

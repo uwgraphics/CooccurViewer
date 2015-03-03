@@ -9,6 +9,13 @@ var ds = {
 var metrics = {};
 var filtered = {};
 
+// keep track of any annotations we have
+var annotations = [];
+
+// the position-ordered sequence of annotations 
+// (e.g. break an annotation up if it spans multiple sequences of positions)
+var annotatePos = [];
+
 // some sort of method to keep track of what the distribution of values looks like
 // (populate on loading data)
 var threshCounts = {
@@ -574,8 +581,45 @@ var loadDataset = function(datasetName, datasetObj) {
   makeBinaryFileRequest(dataDir + datasetObj.attenuation, 'depth');
   makeBinaryFileRequest(dataDir + datasetObj.variantCounts, 'counts');
   makeBinaryFileRequest(dataDir + datasetObj.metrics[0], 'metric');
+  
+  if (datasetObj.hasOwnProperty('annotations')) {
+    $.getJSON(
+      dataDir + datasetObj.annotations, 
+      function(data) {
+        annotations = data;
+        
+        annotations.forEach(function(d, i) {
+          var seqs = d.locations.split(";")
+          seqs.forEach(function(seq) {
+            pos = seq.split('-');
+            newAnnot = {min: pos[0], max: pos[1], name: d.gene, index: i};
+            annotatePos.push(newAnnot);
+          });
+        });
+        
+        annotatePos.sort(function(a,b) {
+          return d3.ascending(a.min, b.min);
+        });
+      }
+    );
+  }
 };
 
+var getAnnotationForPosition = function(pos) {
+  if (annotations.length == 0)
+    return [];
+  
+  matchedAnnotations = [];
+  annotatePos.some(function(d, i) {
+    if (pos >= d.min && pos <= d.max)
+      matchedAnnotations.push(annotations[d.index]);
+    
+    // short-circuit iteration if ending condition met (assumes annotatePos is sorted by min vals)
+    return d.min > pos;
+  });
+  
+  return matchedAnnotations;
+};
 
 var checkFilterEntry = function(i, j) {
   curVal = metrics[i][j];
@@ -649,7 +693,20 @@ var overview = d3.select("#d3canvas")
     .attr('transform', 'translate(30, 25)');
     
 // add a tip div
-var tip = d3.tip().attr('class', 'd3-tip').html(function(d) { return d.pos; });
+var tip = d3.tip()
+  .attr('class', 'd3-tip')
+  .html(function(d) {
+    // ask the annotations if any overlap this position
+    var genes = getAnnotationForPosition(d.pos).map(function(thisGene, i) {
+      return '<span style="color: ' + d3.scale.category10()(i) + '">' + thisGene.gene + '</span>';
+    });
+    
+    if (genes.length == 0)
+      return d.pos;
+    else
+      return d.pos + ": " + genes.join(", ");
+  });
+  
 overview.call(tip);
     
 var detailView = d3.select("#d3canvas")
