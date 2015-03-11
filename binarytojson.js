@@ -588,11 +588,12 @@ var loadDataset = function(datasetName, datasetObj) {
       function(data) {
         annotations = data;
         
+        var curIndex = 0;
         annotations.forEach(function(d, i) {
           var seqs = d.locations.split(";")
           seqs.forEach(function(seq) {
             pos = seq.split('-');
-            newAnnot = {min: pos[0], max: pos[1], name: d.gene, index: i};
+            newAnnot = {min: pos[0], max: pos[1], name: d.gene, geneIndex: i, thisIndex: curIndex++};
             annotatePos.push(newAnnot);
           });
         });
@@ -600,6 +601,9 @@ var loadDataset = function(datasetName, datasetObj) {
         annotatePos.sort(function(a,b) {
           return d3.ascending(a.min, b.min);
         });
+        
+        // generate a layout for these domains, minimizing overlaps
+        generateAnnotationLayout();
       }
     );
   }
@@ -612,13 +616,74 @@ var getAnnotationForPosition = function(pos) {
   matchedAnnotations = [];
   annotatePos.some(function(d, i) {
     if (pos >= d.min && pos <= d.max)
-      matchedAnnotations.push(annotations[d.index]);
+      matchedAnnotations.push(annotations[d.geneIndex]);
     
     // short-circuit iteration if ending condition met (assumes annotatePos is sorted by min vals)
     return d.min > pos;
   });
   
   return matchedAnnotations;
+};
+
+// assumes annotations and annotatePos are populated;
+// returns: augments annotatePos with layer position to help renderer order named domains
+var layers = [];
+var generateAnnotationLayout = function() {
+  // start by sorting genes by number of disjoint domains, then by position
+  var sortedGenes = annotations.slice().sort(function(a, b) {
+    numDomainDiff = b.locations.split(";").length - a.locations.split(";").length;
+    if (numDomainDiff != 0)
+      return numDomainDiff;
+    
+    return a.min - b.min;
+  });
+  
+  
+  // run through the domains
+  layers = [[]];
+  var overlaps = function(layerIndex, reqDomain) {
+    var doesOverlap = false;
+    layers[layerIndex].some(function(d) {
+      var otherDomain = annotatePos[d];
+      if ((reqDomain.min >= otherDomain.min && reqDomain.min <= otherDomain.max) ||
+          (reqDomain.max >= otherDomain.min && reqDomain.max <= otherDomain.max)) {
+        return doesOverlap = true;
+      }
+      
+      return false;
+    });
+    
+    return doesOverlap;
+  };
+  
+  sortedGenes.forEach(function(g) {
+    var curLayer = 0;
+    var theseDomains = annotatePos.filter(function(d) { return d.name == g.gene; });
+    
+    // check if this gene overlaps with the other layers, then assign all domains of this gene
+    // to a layer
+    while (true) {
+      var foundFreeLayer = true;
+      theseDomains.some(function(domain) {
+        foundFreeLayer = !overlaps(curLayer, domain)
+        return !foundFreeLayer;
+      });
+      
+      if (foundFreeLayer)
+        break;
+      
+      curLayer++;
+      
+      // add a layer if we don't have one at the next index
+      if (layers[curLayer] === undefined)
+        layers[curLayer] = [];
+    }
+    
+    // actually add these to the layer now
+    theseDomains.forEach(function(domain) {
+      layers[curLayer].push(domain.thisIndex);
+    });
+  });
 };
 
 var checkFilterEntry = function(i, j) {
@@ -680,9 +745,20 @@ var checkFilterEntry = function(i, j) {
 d3.select('#d3canvas')
   .append('line')
     .attr('x1', 0)
-    .attr('y1', 165)
+    .attr('y1', 195)
     .attr('x2', 1000)
-    .attr('y2', 165)
+    .attr('y2', 195)
+    .attr('stroke', '#000')
+    .attr('stroke-width', 1)
+    .attr('shape-rendering', 'crispEdges');
+    
+// do the same for sliders?
+d3.select('#d3canvas')
+  .append('line')
+    .attr('x1', 0)
+    .attr('y1', 815)
+    .attr('x2', 1000)
+    .attr('y2', 815)
     .attr('stroke', '#000')
     .attr('stroke-width', 1)
     .attr('shape-rendering', 'crispEdges');
@@ -712,7 +788,7 @@ overview.call(tip);
 var detailView = d3.select("#d3canvas")
   .append('g')
     .attr('class', 'detail')
-    .attr('transform', 'translate(30, 170)');
+    .attr('transform', 'translate(30, 200)');
     
 // define red/green linear gradients
 var defs = d3.select('#d3canvas').append('defs');
@@ -1037,6 +1113,45 @@ var clusterPositions = function() {
   x.domain(thisDomain);
 };
 
+// assumes layers and annotationPos variables have been populated
+// TODO: make sure backwards reading frames work (e.g. min is actually max; arrow points backwards)
+var drawAnnotations = function() {
+  // add the annotation group if it doesn't exist
+  var annots = overview.selectAll('g.annotations')
+    .data([layers.reduce(function(p, d) { return p + "," + d.length; }, "")])
+    .enter()
+    .append('g')
+      .attr('class', 'annotations')
+      .attr('transform', 'translate(0,0)');
+      
+  var annotLayer = annots.selectAll('g.annotationLayer').data(layers)
+    .enter()
+    .append('g')
+      .attr('class', 'annotationLayer')
+      .attr('transform', function(d, i) { return 'translate(0,' + (i*20) + ')'; });
+  
+  var geneScale = d3.scale.ordinal()
+    .domain(annotations.map(function(d) { return d.gene; }))
+    .range(d3.range(annotations.length));
+    
+  var geneColors = function(gene) {
+    return d3.scale.category20()(geneScale(gene));
+  }
+      
+  var annot = annotLayer.selectAll('g.annotation')
+    .data(function(layer) { return layer; })
+    .enter()
+    .append('g')
+      .attr('class', 'annotation')
+      .append('rect')
+        .attr('x', function(d) { return seqScale(annotatePos[d].min); })
+        .attr('width', function(d) { return seqScale(annotatePos[d].max - annotatePos[d].min); })
+        .attr('height', 15)
+        .attr('title', function(d) { return annotatePos[d].name; })
+        .style('fill', function(d) { return geneColors(annotatePos[d].name); });
+  
+};
+
 var detailScales = {};
 var detailData = [];    
 
@@ -1065,6 +1180,7 @@ var updateVis = function() {
   seqAxisGrp.enter()
     .append('g')
       .attr('class', 'x axis seqAxis')
+      .attr('transform', 'translate(0,30)')
       .call(seqAxis);
   seqAxisGrp.exit().remove();
 
@@ -1082,7 +1198,7 @@ var updateVis = function() {
     .append('g')
       .attr('class', 'ipos')
       .attr('transform', function(d) { 
-        return 'translate(' + x(d.pos) + ',0)';
+        return 'translate(' + x(d.pos) + ',30)';
       })
       .on('click', function(datum, i) {
         detailData = filtered[i].relatedPairs;
@@ -1211,7 +1327,8 @@ var updateVis = function() {
     .data(clusters, function(d) { return d.min + "," + d.max;})
     .enter()
       .append("g")
-        .attr('class', 'wedge');
+        .attr('class', 'wedge')
+        .attr('transform', 'translate(0,30)');
         
   newWedges.append('path')
     .attr('d', function(d) { 
