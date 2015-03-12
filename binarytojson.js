@@ -303,6 +303,7 @@ var continueIfDone = function() {
         continue;
         
       console.log("failed to find a metric when one was expected, waiting...");
+      console.log(curVal);
       return;
     }
       
@@ -578,6 +579,11 @@ var loadDataset = function(datasetName, datasetObj) {
   ds.numPos = 0;
   ds.numWindow = 0;
   
+  // reset annotations and reload
+  annotations = [];
+  annotatePos = [];
+  layers = [];
+  
   makeBinaryFileRequest(dataDir + datasetObj.attenuation, 'depth');
   makeBinaryFileRequest(dataDir + datasetObj.variantCounts, 'counts');
   makeBinaryFileRequest(dataDir + datasetObj.metrics[0], 'metric');
@@ -598,9 +604,11 @@ var loadDataset = function(datasetName, datasetObj) {
           });
         });
         
+        /*
         annotatePos.sort(function(a,b) {
           return d3.ascending(a.min, b.min);
         });
+        */
         
         // generate a layout for these domains, minimizing overlaps
         generateAnnotationLayout();
@@ -645,8 +653,15 @@ var generateAnnotationLayout = function() {
     var doesOverlap = false;
     layers[layerIndex].some(function(d) {
       var otherDomain = annotatePos[d];
-      if ((reqDomain.min >= otherDomain.min && reqDomain.min <= otherDomain.max) ||
-          (reqDomain.max >= otherDomain.min && reqDomain.max <= otherDomain.max)) {
+      
+      // get actual mins and maxes
+      var reqMin = Math.min(reqDomain.min, reqDomain.max);
+      var reqMax = Math.max(reqDomain.min, reqDomain.max);
+      var oMin = Math.min(otherDomain.min, otherDomain.max);
+      var oMax = Math.max(otherDomain.min, otherDomain.max);
+      
+      //if ((reqMin >= oMin && reqMin <= oMax) || (reqMax >= oMin && reqMax <= oMax)) {
+      if (oMax >= reqMin && oMin <= reqMax) {
         return doesOverlap = true;
       }
       
@@ -1122,21 +1137,20 @@ var drawAnnotations = function() {
     .enter()
     .append('g')
       .attr('class', 'annotations')
-      .attr('transform', 'translate(0,0)');
+      .attr('transform', 'translate(0,-20)');
+      
+  annotY = d3.scale.ordinal()
+    .domain(d3.range(layers.length))
+    .rangeRoundBands([0, 30], 0.1);
       
   var annotLayer = annots.selectAll('g.annotationLayer').data(layers)
     .enter()
     .append('g')
       .attr('class', 'annotationLayer')
-      .attr('transform', function(d, i) { return 'translate(0,' + (i*20) + ')'; });
+      .attr('transform', function(d, i) { return 'translate(0,' + annotY(i) + ')'; });
   
-  var geneScale = d3.scale.ordinal()
-    .domain(annotations.map(function(d) { return d.gene; }))
-    .range(d3.range(annotations.length));
-    
-  var geneColors = function(gene) {
-    return d3.scale.category20()(geneScale(gene));
-  }
+  geneColors = d3.scale.category10()
+    .domain(annotations.map(function(d) { return d.gene; }));
       
   var annot = annotLayer.selectAll('g.annotation')
     .data(function(layer) { return layer; })
@@ -1144,9 +1158,9 @@ var drawAnnotations = function() {
     .append('g')
       .attr('class', 'annotation')
       .append('rect')
-        .attr('x', function(d) { return seqScale(annotatePos[d].min); })
-        .attr('width', function(d) { return seqScale(annotatePos[d].max - annotatePos[d].min); })
-        .attr('height', 15)
+        .attr('x', function(d) { return seqScale(Math.min(annotatePos[d].min, annotatePos[d].max)); })
+        .attr('width', function(d) { return Math.abs(seqScale(annotatePos[d].max) - seqScale(annotatePos[d].min)); })
+        .attr('height', annotY.rangeBand())
         .attr('title', function(d) { return annotatePos[d].name; })
         .style('fill', function(d) { return geneColors(annotatePos[d].name); });
   
@@ -1183,6 +1197,9 @@ var updateVis = function() {
       .attr('transform', 'translate(0,30)')
       .call(seqAxis);
   seqAxisGrp.exit().remove();
+  
+  if (annotations.length != 0)
+    drawAnnotations();
 
   // assume that filtered is populated here
   var ipos = overview.selectAll('g.ipos')
