@@ -43,6 +43,7 @@
       "attenuation": "readBreadth.dat",
       "metrics": ["conjProbDiff.dat"],
       "variantCounts": "variantCounts.dat",
+	  "annotations": "genes.json",
       "numPos": 2500,
       "numReads": 258000,
       "origData": "VHA4_SHA_P11_F21_DPI3_R1_I18_C21.sam",
@@ -56,6 +57,7 @@
         "conjProbDiff-outliers.dat"
       ],
       "variantCounts": "variantCounts.dat",
+	  "annotations": "genes.json",
       "numPos": 2500,
       "numReads": 223000,
       "origData": "VHA3_SHA_P1_F991_DPI3_R1_I23_C27.sam",

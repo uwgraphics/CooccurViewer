@@ -585,6 +585,9 @@ var loadDataset = function(datasetName, datasetObj) {
   annotatePos = [];
   layers = [];
   
+  geneTip.hide();
+  tip.hide();
+  
   makeBinaryFileRequest(dataDir + datasetObj.attenuation, 'depth');
   makeBinaryFileRequest(dataDir + datasetObj.variantCounts, 'counts');
   makeBinaryFileRequest(dataDir + datasetObj.metrics[0], 'metric');
