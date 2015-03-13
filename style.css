@@ -370,6 +370,11 @@ svg .axis text {
   pointer-events: none;
 }
 
+.d3-tip .geneRange {
+	font-weight: normal;
+	color: #ccc;
+}
+
 /* Creates a small triangle extender for the tooltip */
 .d3-tip:after {
   box-sizing: border-box;

@@ -298,8 +298,8 @@ var continueIfDone = function() {
     }
       
     // metric should only be missing if no variants at either position (assume metric isn't loaded yet)
-    if (!curVal.hasOwnProperty('metric') && curVal.depth != curVal.counts[0]) {
-      if (curVal.depth == curVal.counts[0])
+    if (!curVal.hasOwnProperty('metric') && curVal.depth != curVal.counts[0] + curVal.counts[2]) {
+      if (curVal.depth == curVal.counts[0] + curVal.counts[2])
         continue;
         
       console.log("failed to find a metric when one was expected, waiting...");
@@ -570,6 +570,7 @@ var progressStatus = '<div class="progs">' +
   '<progress value="0" max="100" id="metricProg"></progress> ' +
   '<span class="progValue" id="metricProgVal">100%</span>' +
   '</div>';
+var geneColors;
 var loadDataset = function(datasetName, datasetObj) {
   var dataDir = "data/" + datasetName + "/";
 
@@ -604,11 +605,8 @@ var loadDataset = function(datasetName, datasetObj) {
           });
         });
         
-        /*
-        annotatePos.sort(function(a,b) {
-          return d3.ascending(a.min, b.min);
-        });
-        */
+        geneColors = d3.scale.category10()
+          .domain(annotations.map(function(d) { return d.gene; }));
         
         // generate a layout for these domains, minimizing overlaps
         generateAnnotationLayout();
@@ -622,12 +620,9 @@ var getAnnotationForPosition = function(pos) {
     return [];
   
   matchedAnnotations = [];
-  annotatePos.some(function(d, i) {
+  annotatePos.forEach(function(d, i) {
     if (pos >= d.min && pos <= d.max)
       matchedAnnotations.push(annotations[d.geneIndex]);
-    
-    // short-circuit iteration if ending condition met (assumes annotatePos is sorted by min vals)
-    return d.min > pos;
   });
   
   return matchedAnnotations;
@@ -789,7 +784,7 @@ var tip = d3.tip()
   .html(function(d) {
     // ask the annotations if any overlap this position
     var genes = getAnnotationForPosition(d.pos).map(function(thisGene, i) {
-      return '<span style="color: ' + d3.scale.category10()(i) + '">' + thisGene.gene + '</span>';
+      return '<span style="color: ' + geneColors(thisGene.gene) + '">' + thisGene.gene + '</span>';
     });
     
     if (genes.length == 0)
@@ -797,8 +792,24 @@ var tip = d3.tip()
     else
       return d.pos + ": " + genes.join(", ");
   });
-  
 overview.call(tip);
+
+// add a tip for the gene annotations too
+var geneTip = d3.tip()
+  .attr('class', 'd3-tip')
+  .direction('s')
+  .offset(function() {
+    var bbox = this.getBBox();
+    return [bbox.height, 0];
+  })
+  .html(function(d) {
+    var thisGene = annotatePos[d].name;
+    var thisMin = annotatePos[d].min;
+    var thisMax = annotatePos[d].max;
+    return '<span style="color: ' + geneColors(thisGene) + '">' + thisGene + '</span><span class="geneRange">: [' + thisMin + ',' + thisMax + ']</span>';
+  });
+overview.call(geneTip);
+
     
 var detailView = d3.select("#d3canvas")
   .append('g')
@@ -1148,9 +1159,6 @@ var drawAnnotations = function() {
     .append('g')
       .attr('class', 'annotationLayer')
       .attr('transform', function(d, i) { return 'translate(0,' + annotY(i) + ')'; });
-  
-  geneColors = d3.scale.category10()
-    .domain(annotations.map(function(d) { return d.gene; }));
       
   var annot = annotLayer.selectAll('g.annotation')
     .data(function(layer) { return layer; })
@@ -1162,7 +1170,9 @@ var drawAnnotations = function() {
         .attr('width', function(d) { return Math.abs(seqScale(annotatePos[d].max) - seqScale(annotatePos[d].min)); })
         .attr('height', annotY.rangeBand())
         .attr('title', function(d) { return annotatePos[d].name; })
-        .style('fill', function(d) { return geneColors(annotatePos[d].name); });
+        .style('fill', function(d) { return geneColors(annotatePos[d].name); })
+        .on('mouseover', geneTip.show)
+        .on('mouseout', geneTip.hide);
   
 };
 
