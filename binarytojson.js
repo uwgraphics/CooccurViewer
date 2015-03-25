@@ -813,6 +813,20 @@ var geneTip = d3.tip()
   });
 overview.call(geneTip);
 
+// TODO: want the layout to be something like:
+// position        proportion of total for position
+//   537                   767/800 (95.9%)
+var linkTip = d3.tip()
+  .attr('id', 'linkTip')
+  .attr('class', 'd3-tip')
+  .html(function(d) {
+    return "Found " + d.thisCount + " reads.<br />" +
+           "For " + d.i + ": " + d.thisCount + "/" + d.totali + " (" + ((d.thisCount/d.totali) * 100).toFixed(1) + "%)<br />" + 
+           "For " + d.j + ": " + d.thisCount + "/" + d.totalj + " (" + ((d.thisCount/d.totalj) * 100).toFixed(1) + "%)";
+  });
+overview.call(linkTip);
+
+// TODO: also a tip for the position variants/non-variants
     
 var detailView = d3.select("#d3canvas")
   .append('g')
@@ -1781,7 +1795,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     
     path += " q " + ((-xDir) * t * Math.cos(exitAngle)) + " " + ((-yDir) * t * Math.sin(exitAngle)) + " " + ((-xDir) * t * Math.cos(exitAngle) + (-xDir) * t) + " " + ((-yDir) * t * Math.sin(exitAngle));
     
-    return path;          
+    return path;
   };
   
   // handle read exits (those reads that don't appear in the other position)
@@ -1823,7 +1837,12 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
 
       return path;
     })
-    .style('fill', 'rgb(255,0,0)');
+    .style('fill', 'rgb(255,0,0)')
+    .on('mouseover', function(d) {
+      var tc = { thisCount: vivj(d), totali: vi(d), totalj: vj(d), i: d.posi, j: d.posj };
+      linkTip.show(tc);
+    })
+    .on('mouseout', function(d) { linkTip.hide(); });
     
   // handle var_i -> modal_j
   parentGrp.append('path')
@@ -1950,3 +1969,4 @@ $(document).ready(function() {
   
   // continueIfDone() will handle the rest once the files are loaded
 });
+
