@@ -288,7 +288,7 @@ svg .axis text {
 }
 
 #d3canvas .wedge {
-	fill: #333;
+	fill: rgb(184,183,183);
 }
 
 #d3canvas .wedge .selected {
@@ -420,3 +420,41 @@ svg .axis text {
   top: 50%;
   left: 100%;
 }
+
+/* specific linkTip styles */
+#linkTip table {
+	margin-top: 10px;
+	font-weight: 400;
+	width: 250px;
+}
+
+#linkTip th {
+	font-weight: 600;
+	font-size: 0.65em;
+	text-align: center;
+}
+
+#linkTip td {
+	text-align: center;
+	padding: 7px;
+}
+
+#posTip .subtitle {
+	font-weight: 400;
+}
+
+#posTip .genes {
+	padding-top: 8px;
+	display: inline-block;
+}
+
+#posTip .breakdown {
+	font-weight: 400;
+	margin-top: 15px;
+}
+
+#posTip .moredetails {
+	margin: 7px 0 0 20px;
+}
+
+

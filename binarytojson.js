@@ -819,14 +819,67 @@ overview.call(geneTip);
 var linkTip = d3.tip()
   .attr('id', 'linkTip')
   .attr('class', 'd3-tip')
+  .offset([-7, 0])
   .html(function(d) {
-    return "Found " + d.thisCount + " reads.<br />" +
-           "For " + d.i + ": " + d.thisCount + "/" + d.totali + " (" + ((d.thisCount/d.totali) * 100).toFixed(1) + "%)<br />" + 
-           "For " + d.j + ": " + d.thisCount + "/" + d.totalj + " (" + ((d.thisCount/d.totalj) * 100).toFixed(1) + "%)";
+    var ret = "Found " + d.thisCount + " reads.<br />";
+    ret += "<table><thead><tr>";
+    ret += "<th>Position</th><th>Proportion of total for position</th>";
+    ret += "</tr></thead><tbody><tr>";
+    ret += "<td>"+d.i+"</td><td>"+d.thisCount+" / "+d.totali+" ("+((d.thisCount/d.totali) * 100).toFixed(1)+ "%)</td>";
+    ret += "</tr><tr>";
+    ret += "<td>"+d.j+"</td><td>"+d.thisCount+" / "+d.totalj+" ("+((d.thisCount/d.totalj) * 100).toFixed(1)+ "%)</td>";
+    ret += "</tr></tbody></table>";
+    
+    return ret;
   });
 overview.call(linkTip);
 
 // TODO: also a tip for the position variants/non-variants
+// d: {pos: #, av: #, vov: # vom: #, am: #, mom: #, mov: #}
+var posTip = d3.tip()
+  .attr('id', 'posTip')
+  .attr('class', 'd3-tip')
+  .offset([-7, 0])
+  .html(function(d) {
+    ret = 'Position '+d.pos+' <span class="subtitle">(found ' + (d.av+d.am) + ' reads)</span>';
+    
+    // ask the annotations if any overlap this position
+    var genes = getAnnotationForPosition(d.pos).map(function(thisGene, i) {
+      return '<span style="color: ' + geneColors(thisGene.gene) + '">' + thisGene.gene + '</span>';
+    });
+    if (genes.length != 0)
+      ret += '<br /><span class="genes">' + genes.join(", ") + '</span>';
+    ret += "</span>";
+    
+    if (d.hasOwnProperty('vov')) {
+      d.nv = d.av - d.vov - d.vom;
+    
+      ret += '<div class="breakdown">' + d.av + ' (' + (d.av/(d.av+d.am) * 100).toFixed(1) + '% of total)';
+      ret += ' reads are variant.';
+      ret += '<div class="moredetails">' + d.nv + '  (' + (d.nv/d.av*100).toFixed(1) + '%)';
+      ret += ' do not overlap ' + d.opos + '<br />';
+      ret += d.vov + ' (' + (d.vov/d.av*100).toFixed(1) + '%) map to variants at ' + d.opos + '<br />';
+      ret += d.vom + ' (' + (d.vom/d.av*100).toFixed(1) + '%) map to non-variants at ' + d.opos;
+      ret += '</div></div>';
+    } else {
+      d.nm = d.am - d.mom - d.mov;
+    
+      ret += '<div class="breakdown">' + d.am + ' (' + (d.am/(d.av+d.am) * 100).toFixed(1) + '% of total)';
+      ret += ' reads are non-variant.';
+      ret += '<div class="moredetails">' + d.nm + '  (' + (d.nm/d.am*100).toFixed(1) + '%)';
+      ret += ' do not overlap ' + d.opos + '<br />';
+      ret += d.mom + ' (' + (d.mom/d.am*100).toFixed(1) + '%) map to variants at ' + d.opos + '<br />';
+      ret += d.mov + ' (' + (d.mov/d.am*100).toFixed(1) + '%) map to non-variants at ' + d.opos;
+      ret += '</div></div>';
+    }
+    
+    return ret;
+  });
+overview.call(posTip);
+
+var cRed = 'rgb(197,65,65)';
+var cGreen = 'rgb(153,207,153)';
+var cGray = 'rgba(128,128,128,0.5)';
     
 var detailView = d3.select("#d3canvas")
   .append('g')
@@ -846,12 +899,12 @@ var gradient = defs.append('linearGradient')
     
 gradient.append('stop')
   .attr('offset', '0%')
-  .attr('stop-color', 'rgb(255,0,0)')
+  .attr('stop-color', cRed)
   .attr('stop-opacity', 1);
 
 gradient.append('stop')
   .attr('offset', '100%')
-  .attr('stop-color', 'rgb(0,255,0)')
+  .attr('stop-color', cGreen)
   .attr('stop-opacity', 1);
   
 gradient = defs.append('linearGradient')
@@ -864,12 +917,12 @@ gradient = defs.append('linearGradient')
     
 gradient.append('stop')
   .attr('offset', '0%')
-  .attr('stop-color', 'rgb(0,255,0)')
+  .attr('stop-color', cGreen)
   .attr('stop-opacity', 1);
 
 gradient.append('stop')
   .attr('offset', '100%')
-  .attr('stop-color', 'rgb(255,0,0)')
+  .attr('stop-color', cRed)
   .attr('stop-opacity', 1);
       
 var x = d3.scale.ordinal()
@@ -1630,6 +1683,9 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
   height = height || y.rangeBand();
   percentRectWidth = percentRectWidth || 0.1;
   
+  // if the width is under 200, don't do tooltips
+  var doTips = width >= 200;
+  
   // figure out whether we should flip (keep lower position on the left)
   parentGrp.attr('transform', function(d) {
     var preTranslate = d3.select(this).attr('transform');
@@ -1700,7 +1756,14 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
       return s(d, avj(d));
     })
     .attr('width', rectW)
-    .style('fill', '#f00');
+    .style('fill', cRed)
+    .on('mouseover', function(d) {
+      tc = {pos: d.posj, opos: d.posi, am: amj(d), av: avj(d), vov: vivj(d), vom: mivj(d)};
+      if (doTips) posTip.show(tc);
+    })
+    .on('mouseout', function(d) {
+      posTip.hide();
+    });
     
   parentGrp.append('rect')
     .attr('x', 0)
@@ -1711,7 +1774,14 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
       return s(d, amj(d));
     })
     .attr('width', rectW)
-    .style('fill', '#0f0');
+    .style('fill', cGreen)
+    .on('mouseover', function(d) {
+      tc = {pos: d.posj, opos: d.posi, am: amj(d), av: avj(d), mom: mimj(d), mov: vimj(d)};
+      if (doTips) posTip.show(tc);
+    })
+    .on('mouseout', function(d) {
+      posTip.hide();
+    });
     
   parentGrp.append('rect')
     .attr('x', width - rectW)
@@ -1720,7 +1790,14 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
       return s(d, avi(d));
     })
     .attr('width', rectW)
-    .style('fill', '#f00');
+    .style('fill', cRed)
+    .on('mouseover', function(d) {
+      tc = {pos: d.posi, opos: d.posj, am: ami(d), av: avi(d), vov: vivj(d), vom: vimj(d)};
+      if (doTips) posTip.show(tc);
+    })
+    .on('mouseout', function(d) {
+      posTip.hide();
+    });
     
   parentGrp.append('rect')
     .attr('x', width - rectW)
@@ -1731,7 +1808,14 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
       return s(d, ami(d));
     })
     .attr('width', rectW)
-    .style('fill', '#0f0');
+    .style('fill', cGreen)
+    .on('mouseover', function(d) {
+      tc = {pos: d.posi, opos: d.posj, am: ami(d), av: avi(d), mom: mimj(d), mov: mivj(d)};
+      if (doTips) posTip.show(tc);
+    })
+    .on('mouseout', function(d) {
+      posTip.hide();
+    });
     
   // append position labels
   parentGrp.append('text')
@@ -1803,25 +1887,25 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     .attr('d', function(d) {
       return calcLeaving(d, 'vi');
     })
-    .style('fill', 'rgba(128,128,128,0.5)');
+    .style('fill', cGray);
     
   parentGrp.append('path')
     .attr('d', function(d) { 
       return calcLeaving(d, 'mi');
     })
-    .style('fill', 'rgba(128,128,128,0.5)');
+    .style('fill', cGray);
     
   parentGrp.append('path')
     .attr('d', function(d) { 
       return calcLeaving(d, 'vj');
     })
-    .style('fill', 'rgba(128,128,128,0.5)');
+    .style('fill', cGray);
   
   parentGrp.append('path')
     .attr('d', function(d) { 
       return calcLeaving(d, 'mj');
     })
-    .style('fill', 'rgba(128,128,128,0.5)');
+    .style('fill', cGray);
 
   // handle var_i -> var_j
   parentGrp.append('path')
@@ -1837,10 +1921,10 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
 
       return path;
     })
-    .style('fill', 'rgb(255,0,0)')
+    .style('fill', cRed)
     .on('mouseover', function(d) {
       var tc = { thisCount: vivj(d), totali: vi(d), totalj: vj(d), i: d.posi, j: d.posj };
-      linkTip.show(tc);
+      if (doTips) linkTip.show(tc);
     })
     .on('mouseout', function(d) { linkTip.hide(); });
     
@@ -1858,7 +1942,12 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
       
       return path;
     })
-    .style('fill', 'url(#modalToVar)');
+    .style('fill', 'url(#modalToVar)')
+    .on('mouseover', function(d) {
+      var tc = { thisCount: vimj(d), totali: vi(d), totalj: mj(d), i: d.posi, j: d.posj };
+      if (doTips) linkTip.show(tc);
+    })
+    .on('mouseout', function(d) { linkTip.hide(); });
     
   // handle modal_i -> var_j
   parentGrp.append('path')
@@ -1875,7 +1964,12 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
       
       return path;
     })
-    .style('fill', 'url(#varToModal)');
+    .style('fill', 'url(#varToModal)')
+    .on('mouseover', function(d) {
+      var tc = { thisCount: mivj(d), totali: mi(d), totalj: vj(d), i: d.posi, j: d.posj };
+      if (doTips) linkTip.show(tc);
+    })
+    .on('mouseout', function(d) { linkTip.hide(); });
     
   // handle modal_i -> modal_j
   parentGrp.append('path')
@@ -1891,7 +1985,12 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
       path += " l 0 -" + s(d,n);
       return path;
     })
-    .style('fill', 'rgb(0,255,0)');
+    .style('fill', cGreen)
+    .on('mouseover', function(d) {
+      var tc = { thisCount: mimj(d), totali: mi(d), totalj: mj(d), i: d.posi, j: d.posj };
+      if (doTips) linkTip.show(tc);
+    })
+    .on('mouseout', function(d) { linkTip.hide(); });
 };
 
 var updateLoadingStatus = function(msg) {
