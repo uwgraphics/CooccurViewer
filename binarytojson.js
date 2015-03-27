@@ -572,6 +572,7 @@ var progressStatus = '<div class="progs">' +
   '</div>';
 var geneColors;
 var loadDataset = function(datasetName, datasetObj) {
+  datasetName = datasetName.replace("|", "/");
   var dataDir = "data/" + datasetName + "/";
 
   updateLoadingStatus("loading dataset " + datasetName + "<br />" + progressStatus);
@@ -579,6 +580,7 @@ var loadDataset = function(datasetName, datasetObj) {
   // reset dataset counts/parameters;
   ds.numPos = 0;
   ds.numWindow = 0;
+  firstRun = true;
   
   // reset annotations and reload
   annotations = [];
@@ -2032,7 +2034,10 @@ $(document).ready(function() {
       $("#currentDataset").html(curDataset);
       
       // actually load the dataset (matrixviewer.js)
-      loadDataset(curDataset, datasets[curDataset]);
+      var dividerPos = curDataset.indexOf('|');
+      var actualData = dividerPos == -1 ? curDataset : curDataset.substring(0, dividerPos);
+      
+      loadDataset(curDataset, datasets[actualData]);
     }
 
     // if `ignoreHashChange` was true, set it to `false` for the next call
@@ -2046,7 +2051,33 @@ $(document).ready(function() {
     $("#datasetOptions").html("")
     
     for (dataset in datasets) {
-      $("#datasetOptions").append('<li><a href="#' + dataset + '">' + dataset + '</a></li>');
+      // handle submenus to support multiple genomes for the same dataset
+      if (datasets[dataset].hasOwnProperty("subunits")) {
+        var retStr = '<li class="dropdown-submenu">';
+        retStr += '<a data-toggle="dropdown" tabindex="0" aria-expanded="false">' + dataset;
+        retStr += '</a><ul class="dropdown-menu">';
+      
+        // assume that subunits has menus further
+        for (subunit in datasets[dataset].subunits) {
+          retStr += '<li class="dropdown-submenu">';
+          retStr += '<a data-toggle="dropdown" tabindex="0" aria-expanded="false">' + subunit;
+          retStr += '</a><ul class="dropdown-menu">';
+          
+          var subdata = datasets[dataset].subunits[subunit];
+          subdata.forEach(function(subdatum) {
+            retStr += '<li><a href="#' + dataset + "|" + subdatum + '">' + subdatum + '</a></li>';
+          });
+          
+          retStr += "</ul></li>";
+        }
+        
+        retStr += "</ul></li>";
+        $("#datasetOptions").append(retStr);
+        $('.dropdown-submenu > a').submenupicker();
+        
+      } else {
+        $("#datasetOptions").append('<li><a href="#' + dataset + '">' + dataset + '</a></li>');
+      }
     }
     
     checkHash();
