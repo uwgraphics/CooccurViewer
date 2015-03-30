@@ -1387,6 +1387,7 @@ var updateVis = function() {
     .text(function(d) { return d.pos; });
     
   // try to append some shapes on the axis ??
+  /*
   newPos.append('rect')
     .attr('x', function(d) { 
       return seqScale(d.pos) - x(d.pos) - 1;
@@ -1420,6 +1421,7 @@ var updateVis = function() {
         })
       );
     });
+  */
   
   // make wedges
   var newWedges = overview.selectAll('g.wedge')

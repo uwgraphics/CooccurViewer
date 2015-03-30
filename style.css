@@ -260,7 +260,7 @@ svg .axis text {
 #d3canvas {
 	width: 1000px;
 	height: 900px;
-	border: 1px solid #000;
+	/*border: 1px solid #000;*/
 }
 
 #d3canvas text.labelpos {
