@@ -1,5 +1,5 @@
 {
-    "datasets": {
+  "datasets": {
     "SHFVkrc1_RC06": {
       "attenuation": "readBreadth.dat",
       "metrics": [
@@ -39,51 +39,72 @@
       "numReads": 15,
       "origData": "sampledata.sam"
     },
-	"sampledata-new": {
+    "h5n1": {
+      "subunits": 
+        {
+          "P1": [
+            "VHA3_SHA_P1_F3498_DPC7_R1_I25_C29", "VHA3_SHA_P1_F991_DPI1_R1_I22_C26", "VHA3_SHA_P1_F991_DPI3_R1_I23_C27", "VHA3_SHA_P1_F991_DPI5_R1_I24_C28"
+          ],
+          "P2": [
+            "VHA3_SHA_P2_F3299_DPC5_R1_I29_C33", "VHA3_SHA_P2_F3299_DPC7_R1_I30_C34", "VHA3_SHA_P2_F3501_DPI1_R1_I26_C30", "VHA3_SHA_P2_F3501_DPI3_R1_I27_C31", "VHA3_SHA_P2_F3501_DPI5_R1_I28_C32"
+          ],
+          "P7": [
+            "VHA4_SHA_P7_F13_DPI1_R1_I1_C1", "VHA4_SHA_P7_F13_DPI3_R1_I2_C2", "VHA4_SHA_P7_F13_DPI5_R1_I3_C3", "VHA4_SHA_P7_F14_DPC5_R1_I4_C4", "VHA4_SHA_P7_F14_DPC7_R1_I5_C5", "VHA4_SHA_P7_F14_DPC9_R1_I6_C6"
+          ],
+          "P8": [
+            "VHA4_SHA_P8_F15_DPI1_R1_I7_C7", "VHA4_SHA_P8_F15_DPI3_R1_I8_C8", "VHA4_SHA_P8_F15_DPI5_R1_I9_C9", "VHA4_SHA_P8_F16_DPC5_R2_I1_C11", "VHA4_SHA_P8_F16_DPC7_R1_I10_C12", "VHA4_SHA_P8_F16_DPC9_R1_I11_C13"
+          ],
+          "P9": [
+            "VHA4_SHA_P9_F17_DPI1_R1_I12_C14", "VHA4_SHA_P9_F17_DPI3_R1_I13_C15", "VHA4_SHA_P9_F17_DPI5_R2_I5_C45", "VHA4_SHA_P9_F18_DPC5_R1_I14_C17", "VHA4_SHA_P9_F18_DPC7_R1_I15_C18", "VHA4_SHA_P9_F18_DPC9_R1_I16_C19"
+          ],
+          "P11": [
+            "VHA4_SHA_P11_F21_DPI1_R1_I17_C20", "VHA4_SHA_P11_F21_DPI3_R1_I18_C21", "VHA4_SHA_P11_F21_DPI5_R1_I19_C22", "VHA4_SHA_P11_F22_DPC5_R1_I20_C24", "VHA4_SHA_P11_F22_DPC7_R1_I21_C25", "VHA4_SHA_P11_F22_DPI3_R2_I2_C23"
+          ]
+        },
       "attenuation": "readBreadth.dat",
-      "metrics": [
-        "conjProbDiff.dat",
-        "conjProbDiff-ratio.dat"
-      ],
+      "metrics": ["conjProbDiff.dat"],
       "variantCounts": "variantCounts.dat",
-      "numPos": 60,
-      "numReads": 25,
-      "origData": "sampledata.sam"
+      "annotations": "genes.json",
+      "numPos": 2500,
+      "numReads": 258000,
+      "origData": "VHA4_SHA_P11_F21_DPI3_R1_I18_C21.sam",
+      "reference": "VN1203-HA.fa.txt"      
     },
-    "H5N1_VHA4_SHA": {
+    "VHA4_P11_F21_DPI3-ref": {
+      "attenuation": "readBreadth.dat",
+      "metrics": ["conjProbDiff.dat"],
+      "variantCounts": "variantCounts.dat",
+      "annotations": "genes.json",
+      "numPos": 2500,
+      "numReads": 258000,
+      "origData": "VHA4_SHA_P11_F21_DPI3_R1_I18_C21.sam",
+      "reference": "VN1203-HA.fa.txt"      
+    },
+    "VHA3_P1_F991_DPI3-ref": {
       "attenuation": "readBreadth.dat",
       "metrics": [
         "conjProbDiff.dat",
         "conjProbDiff-ratio.dat",
-        "conjProbDiff-gated05.dat",
         "conjProbDiff-outliers.dat"
       ],
       "variantCounts": "variantCounts.dat",
-      "numPos": 2500,
-      "numReads": 258000,
-      "origData": "VHA4_SHA_P11_F21_DPI3_R1_I18_C21.sam"
-    },
-	"VHA4_P11_F21_DPI3-ref": {
-      "attenuation": "readBreadth.dat",
-      "metrics": ["conjProbDiff.dat"],
-	  "variantCounts": "variantCounts.dat",
-      "numPos": 2500,
-      "numReads": 258000,
-      "origData": "VHA4_SHA_P11_F21_DPI3_R1_I18_C21.sam",
-	  "reference": "VN1203-HA.fa.txt"	  
-	},
-	"VHA3_P1_F991_DPI3-ref": {
-      "attenuation": "readBreadth.dat",
-      "metrics": [
-		"conjProbDiff.dat",
-		"conjProbDiff-ratio.dat",
-		"conjProbDiff-outliers.dat"
-      ],
-	  "variantCounts": "variantCounts.dat",
+      "annotations": "genes.json",
       "numPos": 2500,
       "numReads": 223000,
       "origData": "VHA3_SHA_P1_F991_DPI3_R1_I23_C27.sam",
-	  "reference": "VN1203-HA.fa.txt"	  
-	}
+      "reference": "VN1203-HA.fa.txt"      
+    },
+    "SIV": {
+      "attenuation": "readBreadth.dat",
+      "metrics": [
+        "conjProbDiff.dat"
+      ],
+      "variantCounts": "variantCounts.dat",
+      "annotations": "sivmac239_proteins.json",
+      "numPos": 10600,
+      "numReads": 283400,
+      "origData": "CY0334_54wk_Contig.bam",
+      "reference": "CY0334_54wk_Contig.fasta"    
+    }
   }
 }
