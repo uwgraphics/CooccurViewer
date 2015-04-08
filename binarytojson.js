@@ -2029,7 +2029,8 @@ $(document).ready(function() {
         }
         
         ignoreHashChange = true;
-        curDataset = Object.keys(datasets)[4];
+        defaultDataset = 'VHA4_P11_F21_DPI3-ref';
+        curDataset = datasets.hasOwnProperty(defaultDataset) ? defaultDataset : Object.keys(datasets)[0];
       }
       
       // update the current button text
