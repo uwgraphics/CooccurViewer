@@ -1,3 +1,7 @@
 syntax: glob
 Thumbs.db
 data/*
+.git/*
+preprocess/*
+README.md
+LICENSE
