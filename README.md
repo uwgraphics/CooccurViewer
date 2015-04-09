@@ -34,7 +34,7 @@ In order to generate the data for the application, one must parse a [SAM file](h
 											every positions to check for
 											correlation (default 300)
 
-	Please direct any questions to Alper Sarikaya (sarikaya@cs.wisc.edu).
+	Please direct any questions to Alper Sarikaya ([email]).
 
 Once the output data directory is generated, copy the directory and its contents to the `data/` directory in the visualization.  To let the vis know that additional data is available, ammend the `definedData.json` file in the root to point to the relevant data files.  Define a named top-level object with the name of the data directory (e.g. **SIV**), and then the required data as below, at minimum. 
 
