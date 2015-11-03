@@ -64,6 +64,8 @@ public class CoOccurLibrary {
 	
 	static int[][][] variantCounts; // for every overlapping i,j, counts in the 2x2 matrix (mm, mv, vm, vv)
 	static int[][] baseCounts;       // for every position, count the bases (A, T, C, G)
+	
+	static Map<PosPair, int[][]> cooccurCounts; // for every overlapping i,j, count the 4x4 matrix (A,C,T,G for each pos)
 
 	static double[] cooccurenceMetric; // holds the 1D metric of cooccurence
 	static double maxCooccurMetric; // holds the maximum value of above
@@ -219,7 +221,7 @@ public class CoOccurLibrary {
 
 	private static void printHelp(Options opts) {
 		HelpFormatter formatter = new HelpFormatter();
-		String header = "\nParses a given SAM file into a metric that can be used by the MatrixViewer visualization. See more information at <URL>\n\n";
+		String header = "\nParses a given SAM file into a metric that can be used by the MatrixViewer visualization. See more information at http://graphics.wisc.edu/Vis/Co-occur/\n";
 		String footer = "\nPlease direct any questions to Alper Sarikaya (sarikaya@cs.wisc.edu).";
 		formatter.printHelp("CoOccurLibrary", header, opts, footer, true);
 	}
@@ -261,15 +263,6 @@ public class CoOccurLibrary {
 		//getReadDepth();
 		// doReadDiversity();
 	}
-
-	/* REMOVE PROCESSING CODE
-	// draw is called over and over
-	public void draw() {
-		//drawReadDepth();
-		//drawReadBreadth();
-		//drawCooccurenceMetric();
-	}
-	*/
 
 	static void parseFAReferenceFile() {
 		String line = "";
@@ -343,10 +336,31 @@ public class CoOccurLibrary {
 	static void doReadBreadth() {
 		doReadBreadth(true);
 	}
+
+	static void getReadBreadth() {
+		readBreadth = new int[numPos][numPos];
+		actualReads = 0;
+		
+		for (int i = 0; i < reads.size(); i++) {
+			SingleRead curRead = reads.get(i);
+			if (curRead == null) break;
+			
+			for (int k = curRead.startPos; k < (curRead.startPos + curRead.length); k++) {
+				for (int n = curRead.startPos; n < (curRead.startPos + curRead.length); n++) {
+					if (++readBreadth[k][n] > maxValue) {
+						maxValue = readBreadth[k][n];
+					}
+				}
+				
+				if (k > maxPosition) maxPosition = k;
+			}
+			
+			actualReads++;
+		}
+	}
 	
 	static void doReadBreadth(boolean writeBinary) {
 		getReadBreadth();
-		
 		
 		// dump to file
 		if (writeBinary) {
@@ -488,20 +502,6 @@ public class CoOccurLibrary {
 		}
 	}
 
-	/* REMOVE PROCESSING CODE
-	void drawCooccurenceMetric() {
-		size(600,600);
-		noStroke();
-		
-		for (int i = 0; i < 500; i++) {
-			fill((float)(255.f * (((float)cooccurenceMetric[i] - minCooccurMetric) / (maxCooccurMetric - minCooccurMetric))), 0.f, 0.f);
-			rect(((i) % 23) * 26 + 1, ((i) / 23) * 26 + 1, 25, 25, 7);
-		}
-		
-		save(dataPath("../../data/cooccurence.png"));
-	}
-	*/
-	
 	static private double getChiSquaredDiff(double[] pop, long[] sample) {
 		// if there is any count that is zero, remove it 
 		// (as it removes a useless DOF, and chiSquareTest() wants positive counts for the population)
@@ -573,44 +573,6 @@ public class CoOccurLibrary {
 		return dist / 2.f;
 	}
 	
-	static void getReadBreadth() {
-		readBreadth = new int[numPos][numPos];
-		actualReads = 0;
-		
-		for (int i = 0; i < reads.size(); i++) {
-			SingleRead curRead = reads.get(i);
-			if (curRead == null) break;
-			
-			for (int k = curRead.startPos; k < (curRead.startPos + curRead.length); k++) {
-				for (int n = curRead.startPos; n < (curRead.startPos + curRead.length); n++) {
-					if (++readBreadth[k][n] > maxValue) {
-						maxValue = readBreadth[k][n];
-					}
-				}
-				
-				if (k > maxPosition) maxPosition = k;
-			}
-			
-			actualReads++;
-		}
-	}
-
-	/* REMOVE PROCESSING CODE 
-	void drawReadBreadth() {
-		size(maxPosition, maxPosition);
-		noStroke();
-		
-		for (int i = 0; i < maxPosition; i++) {
-			for (int j = 0; j < maxPosition; j++) {
-				fill((float)(255.f * ((float)readBreadth[i][j] / maxValue)), 0.f, 0.f);
-				rect(i, j, 1, 1);
-			}
-		}
-		
-		save(dataPath("../../data/testDepth.png"));
-	}
-	*/
-
 	private static int getRefAtPos(int pos) {
 		return REFERENCE_FA_FILE == "" ? modalConsensus[pos] : givenConsensus[pos];
 	}
@@ -622,6 +584,8 @@ public class CoOccurLibrary {
 
 		variantCounts = new int[numPos][numPos][4];
 		baseCounts = new int[numPos][4];
+
+		cooccurCounts = new HashMap<PosPair, int[][]>();
 		
 		Map<Integer, Map<Character, ArrayList<SingleRead>>> readCategories = new HashMap<Integer, Map<Character, ArrayList<SingleRead>>>();
 		int minReadPos = 0;
@@ -701,17 +665,23 @@ public class CoOccurLibrary {
 					//System.err.println("no reference found at position " + j);
 					continue;
 				}
+				
+				int[][] pairCooccurCounts = new int[4][4];
 
 				// iterate through each i-category (as long as it's not the modal one)
 				// double variantsi = 0, variantsij = 0, modals = 0;
 				double vari_varj = 0, vari_modalj = 0, modali_varj = 0, modali_modalj = 0; 
 				for (Map.Entry<Character, ArrayList<SingleRead>> category : thisCategories.entrySet()) {
+					char i_base = category.getKey();
+
 					// check for modality of i; if so, count all reads that span j
-					if (bases[modalRead] == category.getKey()) {
+					if (bases[modalRead] == i_base) {
 						for (SingleRead curRead : category.getValue()) {
 							if (!curRead.overlaps(j)) continue;
 							
-							if (curRead.getReadAtAbsolutePos(j) == bases[getRefAtPos(j)])
+							char j_base = curRead.getReadAtAbsolutePos(j);
+							pairCooccurCounts[SingleRead.bpToIndex(i_base)][SingleRead.bpToIndex(j_base)]++;
+							if (j_base == bases[getRefAtPos(j)])
 								modali_modalj++;
 							else
 								modali_varj++;
@@ -722,13 +692,17 @@ public class CoOccurLibrary {
 							if (!curRead.overlaps(j)) continue;
 							
 							// add to counter based on modality of the jth read
-							if (curRead.getReadAtAbsolutePos(j) == bases[getRefAtPos(j)])
+							char j_base = curRead.getReadAtAbsolutePos(j);
+							pairCooccurCounts[SingleRead.bpToIndex(i_base)][SingleRead.bpToIndex(j_base)]++;
+							if (j_base == bases[getRefAtPos(j)])
 								vari_modalj++;
 							else
 								vari_varj++;
 						}
 					}
 				}
+
+				cooccurCounts.put(new PosPair(i,j), pairCooccurCounts);
 				
 				// add some counts for the 2x2 conjunction matrix
 				variantCounts[i][j][0] = (int)modali_modalj;
@@ -808,6 +782,11 @@ public class CoOccurLibrary {
 		int r_i = r.nextInt(numPos);
 		int r_j = r.nextInt(numPos);
 		
+		while (readBreadth[r_i][r_j] == 0) {
+			r_i = r.nextInt(numPos);
+			r_j = r.nextInt(numPos);
+		}
+
 		int[] m_ij = variantCounts[r_i][r_j];
 		int[] m_ji = variantCounts[r_j][r_i];
 
@@ -818,7 +797,15 @@ public class CoOccurLibrary {
 						  readBreadth[r_i][r_j]);
 		System.out.printf("%4d: %5d, %5d, %5d, %5d --> %6d (depth: %6d)\n", r_j, m_ji[0], m_ji[1], m_ji[2], 
 						  m_ji[3], m_ji[0] + m_ji[1] + m_ji[2] + m_ji[3],
-						  readBreadth[r_j][r_i]);		
+						  readBreadth[r_j][r_i]);
+
+		System.out.printf("co-occur counts (%d to %d):\n", r_i, r_j);
+		int[][] pairCounts = cooccurCounts.get(new PosPair(r_i, r_j));
+		for (int n = 0; n < 4; n++) {
+			for (int m = 0; m < 4; m++) {
+				System.out.printf("\t%c (i) -> %c (j): %6d (%5.2f%)", bases[n], bases[m], pairCounts[n][m], pairCounts[n][m] / 1.0 / readBreadth[r_i][r_j] * 100);
+			}
+		}
 	}
 	
 	static void dumpConjProbabilities(CooccurMetric metric) {
@@ -1224,6 +1211,24 @@ public class CoOccurLibrary {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+}
+
+class PosPair {
+	public int i;
+	public int j;
+	
+	public PosPair(int i, int j) {
+		this.i = i;
+		this.j = j;
+	}
+
+	public int first() {
+		return i;
+	}
+
+	public int second() {
+		return j;
 	}
 }
 
