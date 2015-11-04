@@ -948,7 +948,8 @@ public class CoOccurLibrary {
 				for (Map.Entry<PosPair, Map<CooccuringBases, Integer>> pos : cooccurCounts.entrySet()) {
 					int i = pos.getKey().i;
 					int j = pos.getKey().j;
-					os.writeInt(i * (windowSize * 2 + 1) + (i - j + windowSize + 1));
+					int absIndex = i * (windowSize * 2 + 1) + (j - i + windowSize);
+					os.writeInt(absIndex);
 					
 					os.writeByte(pos.getValue().size());
 					for (Map.Entry<CooccuringBases, Integer> counts : pos.getValue().entrySet()) {
