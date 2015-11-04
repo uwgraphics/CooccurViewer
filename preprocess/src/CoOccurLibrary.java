@@ -1,16 +1,13 @@
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
-
 import java.io.DataOutputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
-
 import java.nio.file.Files;
 import java.nio.file.Paths;
-
 import java.text.DecimalFormat;
 import java.util.*;
 
@@ -65,7 +62,7 @@ public class CoOccurLibrary {
 	static int[][][] variantCounts; // for every overlapping i,j, counts in the 2x2 matrix (mm, mv, vm, vv)
 	static int[][] baseCounts;       // for every position, count the bases (A, T, C, G)
 	
-	static Map<PosPair, int[][]> cooccurCounts; // for every overlapping i,j, count the 4x4 matrix (A,C,T,G for each pos)
+	static Map<PosPair, Map<CooccuringBases, Integer>> cooccurCounts; // for every overlapping i,j, count the 4x4 matrix (A,C,T,G for each pos)
 
 	static double[] cooccurenceMetric; // holds the 1D metric of cooccurence
 	static double maxCooccurMetric; // holds the maximum value of above
@@ -585,7 +582,7 @@ public class CoOccurLibrary {
 		variantCounts = new int[numPos][numPos][4];
 		baseCounts = new int[numPos][4];
 
-		cooccurCounts = new HashMap<PosPair, int[][]>();
+		cooccurCounts = new HashMap<PosPair, Map<CooccuringBases, Integer>>();
 		
 		Map<Integer, Map<Character, ArrayList<SingleRead>>> readCategories = new HashMap<Integer, Map<Character, ArrayList<SingleRead>>>();
 		int minReadPos = 0;
@@ -702,7 +699,7 @@ public class CoOccurLibrary {
 					}
 				}
 
-				cooccurCounts.put(new PosPair(i,j), pairCooccurCounts);
+				cooccurCounts.put(new PosPair(i,j), CooccuringBases.createFrom4x4array(pairCooccurCounts));
 				
 				// add some counts for the 2x2 conjunction matrix
 				variantCounts[i][j][0] = (int)modali_modalj;
@@ -800,11 +797,18 @@ public class CoOccurLibrary {
 						  readBreadth[r_j][r_i]);
 
 		System.out.printf("co-occur counts (%d to %d):\n", r_i, r_j);
-		int[][] pairCounts = cooccurCounts.get(new PosPair(r_i, r_j));
-		for (int n = 0; n < 4; n++) {
-			for (int m = 0; m < 4; m++) {
-				System.out.printf("\t%c (i) -> %c (j): %6d (%5.2f%)", bases[n], bases[m], pairCounts[n][m], pairCounts[n][m] / 1.0 / readBreadth[r_i][r_j] * 100);
-			}
+//		int[][] pairCounts = cooccurCounts.get(new PosPair(r_i, r_j));
+//		for (int n = 0; n < 4; n++) {
+//			for (int m = 0; m < 4; m++) {
+//				System.out.printf("\t%c (i) -> %c (j): %6d (%5.2f%%)\n", bases[n], bases[m], pairCounts[n][m], pairCounts[n][m] / 1.0 / readBreadth[r_i][r_j] * 100);
+//			}
+//		}
+		
+		Map<CooccuringBases, Integer> pairCounts = cooccurCounts.get(new PosPair(r_i, r_j));
+		for (Map.Entry<CooccuringBases, Integer> entry : pairCounts.entrySet()) {
+			CooccuringBases b = entry.getKey();
+			int n = entry.getValue();
+			System.out.printf("\t%c (i) -> %c (j): %6d (%5.2f%%)\n", bases[b.i], bases[b.j], n, n / 1.0 / readBreadth[r_i][r_j] * 100);
 		}
 	}
 	
@@ -872,7 +876,7 @@ public class CoOccurLibrary {
 				os.close();
 
 				outputFile = OUTPUT_DIRECTORY + "variantCounts.dat";
-				System.out.print("writing to " + outputFile + " ... ");
+				System.out.print("writing to " + outputFile + " ...\n");
 				os = new DataOutputStream(new FileOutputStream(outputFile));
 				
 				// write dimensions
@@ -905,7 +909,7 @@ public class CoOccurLibrary {
 				os.close();
 
 				outputFile = OUTPUT_DIRECTORY + "baseCounts.dat";
-				System.out.print("writing to " + outputFile + " ... ");
+				System.out.print("writing to " + outputFile + " ... \n");
 				os = new DataOutputStream(new FileOutputStream(outputFile));
 
 				// write dimensions
@@ -927,6 +931,32 @@ public class CoOccurLibrary {
 					}
 				}
 
+				os.flush();
+				os.close();
+				
+				// dump 4x4 matrix as well (??)
+				outputFile = OUTPUT_DIRECTORY + "fullCounts.dat";
+				System.out.print("writing to " + outputFile + " ... \n");
+				os = new DataOutputStream(new FileOutputStream(outputFile));
+				
+				// write dimensions
+				os.writeInt(2 * windowSize + 1);
+				os.writeInt(numPos);
+				os.writeInt(setHeaderFlags(true, true, 4, 4));
+				
+				// ... we'll see how this works
+				for (Map.Entry<PosPair, Map<CooccuringBases, Integer>> pos : cooccurCounts.entrySet()) {
+					int i = pos.getKey().i;
+					int j = pos.getKey().j;
+					os.writeInt(i * (windowSize * 2 + 1) + (i - j + windowSize + 1));
+					
+					os.writeByte(pos.getValue().size());
+					for (Map.Entry<CooccuringBases, Integer> counts : pos.getValue().entrySet()) {
+						os.writeByte(counts.getKey().baseByte());
+						os.writeInt(counts.getValue());
+					}
+				}
+				
 				os.flush();
 				os.close();
 
@@ -1229,6 +1259,71 @@ class PosPair {
 
 	public int second() {
 		return j;
+	}
+	
+	public int hashCode() {
+		return i * j;
+	}
+	
+	public boolean equals(Object obj) {
+		if (this == obj) return true;
+		if (obj == null) return false;
+		if (getClass() != obj.getClass()) return false;
+		
+		PosPair other = (PosPair)obj;
+		return other.i == this.i && other.j == this.j;		
+	}
+}
+
+class CooccuringBases {
+	public int i;
+	public int j;
+	static char bases[] = {'A', 'T', 'C', 'G'}; 
+	
+	static Map<CooccuringBases, Integer> createFrom4x4array(int[][] counts) {
+		assert(counts.length == 4 && counts[0].length == 4);
+		
+		Map<CooccuringBases, Integer> theseCounts = new HashMap<CooccuringBases, Integer>();
+		for (int n = 0; n < bases.length; n++) {
+			for (int m = 0; m < bases.length; m++) {
+				int thisCount = counts[n][m];
+				if (thisCount != 0) {
+					theseCounts.put(new CooccuringBases(n, m), thisCount);
+				}
+			}
+		}
+		
+		return theseCounts;
+	}
+	
+	public CooccuringBases(int i, int j) {
+		this.i = i;
+		this.j = j;
+	}
+	
+	public char firstBase() {
+		return bases[this.i];
+	}
+	
+	public char secondBase() {
+		return bases[this.j];
+	}
+	
+	public int baseByte() {
+		return i << 2 | j;
+	}
+	
+	public int hashCode() {
+		return i * bases.length + j;
+	}
+	
+	public boolean equals(Object obj) {
+		if (this == obj) return true;
+		if (obj == null) return false;
+		if (getClass() != obj.getClass()) return false;
+		
+		CooccuringBases other = (CooccuringBases)obj;
+		return other.i == this.i && other.j == this.j;
 	}
 }
 
