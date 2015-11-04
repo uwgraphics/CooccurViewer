@@ -138,47 +138,94 @@ var loadBinaryData = function(data, name) {
   var offset = headerSize;
   if (isSparse) {
     console.log(name + " is sparse...");
-    for (var n = 0; n < expectedPositions; n++) {
-      var curIndex = dv.getInt32(offset);
-      offset += 4;
+    
+    // handle the special fullcounts file 
+    // (which contains a sparse 4x4 matrix of bases for every co-occurrence)
+    if (name == "fullcounts") {
+      while (dv.byteLength != offset) {
+        var curIndex = dv.getInt32(offset);
+        offset += 4;
+        
+        // okay, so we have the index (0-indexed); convert into i, j coordinates (1-index)
+        var i = Math.floor(curIndex / ds.numWindow) + 1;
+        var j = (i - 1) - Math.floor(ds.numWindow / 2) + (curIndex % ds.numWindow) + 1;
+        
+        // create an entry for i if it doesn't exist
+        if (!metrics.hasOwnProperty(i))
+          metrics[i] = {};
 
-      // okay, so we have the index (0-indexed); convert into i, j coordinates (1-index)
-      var i = Math.floor(curIndex / ds.numWindow) + 1;
-      var j = (i - 1) - Math.floor(ds.numWindow / 2) + (curIndex % ds.numWindow) + 1;
+        // create an entry for i > j if it doesn't exist
+        if (!metrics[i].hasOwnProperty(j))
+          metrics[i][j] = {};
+          
+        metrics[i][j][name] = [];
+        
+        var bases = ['A', 'T', 'C', 'G'];
+        var getBasesFromByte = function(byte) {
+          var bi = bases[byte >> 2];
+          var bj = bases[byte & 3];
+          return bi + "," + bj;
+        };
+        
+        var numEntries = dv.getInt8(offset);
+        offset += 1;
+        for (var n = 0; n < numEntries; n++) {
+          var baseByte = dv.getInt8(offset);
+          offset += 1;
+          
+          var base = getBasesFromByte(baseByte);
+          
+          var newEntry = {};
+          newEntry['base'] = base;
+          newEntry['num'] = dv.getInt32(offset);
+          offset += 4;
+          
+          metrics[i][j][name].push(newEntry);
+        }
+      }
+    } else {      
+      for (var n = 0; n < expectedPositions; n++) {
+        var curIndex = dv.getInt32(offset);
+        offset += 4;
 
-      // create an entry for i if it doesn't exist
-      if (!metrics.hasOwnProperty(i))
-        metrics[i] = {};
+        // okay, so we have the index (0-indexed); convert into i, j coordinates (1-index)
+        var i = Math.floor(curIndex / ds.numWindow) + 1;
+        var j = (i - 1) - Math.floor(ds.numWindow / 2) + (curIndex % ds.numWindow) + 1;
 
-      // create an entry for i > j if it doesn't exist
-      if (!metrics[i].hasOwnProperty(j))
-        metrics[i][j] = {};
+        // create an entry for i if it doesn't exist
+        if (!metrics.hasOwnProperty(i))
+          metrics[i] = {};
 
-      // fill in the metric
-      if (thisSpacing > 1) { 
-        if (!metrics[i][j].hasOwnProperty(name))
-          metrics[i][j][name] = [];
-      
-        for (var k = 0; k < thisSpacing; k++) {
+        // create an entry for i > j if it doesn't exist
+        if (!metrics[i].hasOwnProperty(j))
+          metrics[i][j] = {};
+
+        // fill in the metric
+        if (thisSpacing > 1) { 
+          if (!metrics[i][j].hasOwnProperty(name))
+            metrics[i][j][name] = [];
+        
+          for (var k = 0; k < thisSpacing; k++) {
+            var curVal = getDataVal(offset);
+            metrics[i][j][name][k] = curVal;
+            
+            // calculate bounds
+            metrics['bounds'][name][k]['max'] = Math.max(metrics['bounds'][name][k]['max'], curVal);
+            metrics['bounds'][name][k]['min'] = Math.min(metrics['bounds'][name][k]['min'], curVal);
+            
+            offset += precision;
+          }
+        } else {
           var curVal = getDataVal(offset);
-          metrics[i][j][name][k] = curVal;
-          
+          metrics[i][j][name] = curVal;
+
           // calculate bounds
-          metrics['bounds'][name][k]['max'] = Math.max(metrics['bounds'][name][k]['max'], curVal);
-          metrics['bounds'][name][k]['min'] = Math.min(metrics['bounds'][name][k]['min'], curVal);
-          
+          metrics['bounds'][name]['max'] = Math.max(metrics['bounds'][name]['max'], curVal);
+          metrics['bounds'][name]['min'] = Math.min(metrics['bounds'][name]['min'], curVal);
+
+          // increment the offset counter
           offset += precision;
         }
-      } else {
-        var curVal = getDataVal(offset);
-        metrics[i][j][name] = curVal;
-
-        // calculate bounds
-        metrics['bounds'][name]['max'] = Math.max(metrics['bounds'][name]['max'], curVal);
-        metrics['bounds'][name]['min'] = Math.min(metrics['bounds'][name]['min'], curVal);
-
-        // increment the offset counter
-        offset += precision;
       }
     }
   } else {
@@ -618,6 +665,10 @@ var loadDataset = function(datasetName, datasetObj) {
       }
     );
   }
+  
+  if (datasetObj.hasOwnProperty('fullcounts')) {
+    makeBinaryFileRequest(dataDir + datasetObj.fullcounts, 'fullcounts');
+  }
 };
 
 var getAnnotationForPosition = function(pos) {
@@ -781,7 +832,13 @@ d3.select('#d3canvas')
 var overview = d3.select("#d3canvas")
   .append('g')
     .attr('class', 'overview')
-    .attr('transform', 'translate(30, 25)');
+    .attr('transform', 'translate(30, 25)'); 
+
+// function to add comma separators to make human-readable numbers
+// <http://stackoverflow.com/questions/2901102/how-to-print-a-number-with-commas-as-thousands-separators-in-javascript>
+var dispNum = function(num) {
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
     
 // add a tip div
 var tip = d3.tip()
@@ -823,13 +880,13 @@ var linkTip = d3.tip()
   .attr('class', 'd3-tip')
   .offset([-7, 0])
   .html(function(d) {
-    var ret = "Found " + d.thisCount + " reads.<br />";
+    var ret = "Found " + dispNum(d.thisCount) + " reads.<br />";
     ret += "<table><thead><tr>";
     ret += "<th>Position</th><th>Proportion of total for position</th>";
     ret += "</tr></thead><tbody><tr>";
-    ret += "<td>"+d.i+"</td><td>"+d.thisCount+" / "+d.totali+" ("+((d.thisCount/d.totali) * 100).toFixed(1)+ "%)</td>";
+    ret += "<td>"+d.i+"</td><td>"+dispNum(d.thisCount)+" / "+dispNum(d.totali)+" ("+((d.thisCount/d.totali) * 100).toFixed(1)+ "%)</td>";
     ret += "</tr><tr>";
-    ret += "<td>"+d.j+"</td><td>"+d.thisCount+" / "+d.totalj+" ("+((d.thisCount/d.totalj) * 100).toFixed(1)+ "%)</td>";
+    ret += "<td>"+d.j+"</td><td>"+dispNum(d.thisCount)+" / "+dispNum(d.totalj)+" ("+((d.thisCount/d.totalj) * 100).toFixed(1)+ "%)</td>";
     ret += "</tr></tbody></table>";
     
     return ret;
@@ -843,7 +900,7 @@ var posTip = d3.tip()
   .attr('class', 'd3-tip')
   .offset([-7, 0])
   .html(function(d) {
-    ret = 'Position '+d.pos+' <span class="subtitle">(found ' + (d.av+d.am) + ' reads)</span>';
+    ret = 'Position '+d.pos+' <span class="subtitle">(found ' + dispNum(d.av+d.am) + ' reads)</span>';
     
     // ask the annotations if any overlap this position
     var genes = getAnnotationForPosition(d.pos).map(function(thisGene, i) {
@@ -856,22 +913,22 @@ var posTip = d3.tip()
     if (d.hasOwnProperty('vov')) {
       d.nv = d.av - d.vov - d.vom;
     
-      ret += '<div class="breakdown">' + d.av + ' (' + (d.av/(d.av+d.am) * 100).toFixed(1) + '% of total)';
+      ret += '<div class="breakdown">' + dispNum(d.av) + ' (' + (d.av/(d.av+d.am) * 100).toFixed(1) + '% of total)';
       ret += ' reads are variant.';
-      ret += '<div class="moredetails">' + d.nv + '  (' + (d.nv/d.av*100).toFixed(1) + '%)';
+      ret += '<div class="moredetails">' + dispNum(d.nv) + '  (' + (d.nv/d.av*100).toFixed(1) + '%)';
       ret += ' do not overlap ' + d.opos + '<br />';
-      ret += d.vov + ' (' + (d.vov/d.av*100).toFixed(1) + '%) map to variants at ' + d.opos + '<br />';
-      ret += d.vom + ' (' + (d.vom/d.av*100).toFixed(1) + '%) map to non-variants at ' + d.opos;
+      ret += dispNum(d.vov) + ' (' + (d.vov/d.av*100).toFixed(1) + '%) map to variants at ' + d.opos + '<br />';
+      ret += dispNum(d.vom) + ' (' + (d.vom/d.av*100).toFixed(1) + '%) map to non-variants at ' + d.opos;
       ret += '</div></div>';
     } else {
       d.nm = d.am - d.mom - d.mov;
     
-      ret += '<div class="breakdown">' + d.am + ' (' + (d.am/(d.av+d.am) * 100).toFixed(1) + '% of total)';
+      ret += '<div class="breakdown">' + dispNum(d.am) + ' (' + (d.am/(d.av+d.am) * 100).toFixed(1) + '% of total)';
       ret += ' reads are non-variant.';
-      ret += '<div class="moredetails">' + d.nm + '  (' + (d.nm/d.am*100).toFixed(1) + '%)';
+      ret += '<div class="moredetails">' + dispNum(d.nm) + '  (' + (d.nm/d.am*100).toFixed(1) + '%)';
       ret += ' do not overlap ' + d.opos + '<br />';
-      ret += d.mom + ' (' + (d.mom/d.am*100).toFixed(1) + '%) map to variants at ' + d.opos + '<br />';
-      ret += d.mov + ' (' + (d.mov/d.am*100).toFixed(1) + '%) map to non-variants at ' + d.opos;
+      ret += dispNum(d.mom) + ' (' + (d.mom/d.am*100).toFixed(1) + '%) map to variants at ' + d.opos + '<br />';
+      ret += dispNum(d.mov) + ' (' + (d.mov/d.am*100).toFixed(1) + '%) map to non-variants at ' + d.opos;
       ret += '</div></div>';
     }
     
@@ -1456,8 +1513,13 @@ var updateVis = function() {
   hideLoading();
 };
 
+
 // type is one of {'metric', 'depth', 'variants'}
 var makeColorRamp = function(type, parent, i, label, width, height) {
+  makeColorRampAbsPos(type, parent, 0, i * 35, label, "", width, height);
+};
+
+var makeColorRampAbsPos = function(type, parent, x, y, label, title, width, height) {
   width = width || 63;
   height = height || 6;
   
@@ -1492,7 +1554,7 @@ var makeColorRamp = function(type, parent, i, label, width, height) {
   
   var ramp = parent.append('g')
     .attr('class', 'ramp')
-    .attr('transform', 'translate(0,' + (i * 35) + ')');
+    .attr('transform', 'translate(' + x + ',' + y + ')');
     
   var rampX = d3.scale.ordinal().domain(colors).rangeRoundBands([0, width]);
     
@@ -1531,10 +1593,27 @@ var makeColorRamp = function(type, parent, i, label, width, height) {
         return scale(d[type]);
     });
     
+  //ramp.append('text')
+  //  .attr('x', width + 13)
+  //  .attr('y', 23)
+  //  .text(label);
   ramp.append('text')
-    .attr('x', width + 13)
-    .attr('y', 23)
+    .attr('x', function(d) {
+      if (calcVar)
+        return indiScale(calcVar(d));
+      else
+        return indiScale(d[type]); 
+    })
+    .attr('y', 40)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '0.6em')
     .text(label);
+    
+  ramp.append('text')
+    .attr('x', Math.round(width / 2))
+    .attr('y', -5)
+    .attr('text-anchor', 'middle')
+    .text(title);
 };
 
 var curDetail = [];
@@ -1642,24 +1721,24 @@ var updateDetail = function(page) {
       'translate(' + (detailWidth + 10) + "," + Math.floor(y.rangeBand() * 0.1) + ")"
     );
     
-  makeColorRamp('metric', newDetail, 0,
+  makeColorRampAbsPos('metric', newDetail, 25, 145,
     function(d) { 
-      return d.metric.toFixed(3) + ": correlation between " + d.posi + " and " + d.posj;
-    });
+      return d.metric.toFixed(3);
+    }, "correlation");
     
-  makeColorRamp('depth', newDetail, 1,
+  makeColorRampAbsPos('depth', newDetail, 125, 145,
     function(d) {
-      return (d.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2) + "% of max depth";
-    });
+      return (d.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2) + "%";
+    }, "depth");
     
-  makeColorRamp('vari', newDetail, 2,
+  makeColorRampAbsPos('vari', newDetail, 225, 145,
     function(d) {
-      return "Variants at " + d.posi + ": " + ((d.counts[2] + d.counts[3]) / d.depth * 100).toFixed(1) + "%"; 
-    });
+      return ((d.counts[2] + d.counts[3]) / d.depth * 100).toFixed(1) + "%"; 
+    }, "variants");
     
-  makeColorRamp('varj', newDetail, 3,
+  makeColorRampAbsPos('varj', newDetail, 225, 190,
     function(d) {
-      return "Variants at " + d.posj + ": " + ((d.counts[1] + d.counts[3]) / d.depth * 100).toFixed(1) + "%";
+      return ((d.counts[1] + d.counts[3]) / d.depth * 100).toFixed(1) + "%";
     });
     
   // handle making the correlation curves
@@ -1744,6 +1823,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
   var rectW = width * percentRectWidth + overlap;
   var areaW = width - 2 * (width * percentRectWidth);
   
+  // variants of pos_j
   parentGrp.append('rect')
     .attr('x', 0)
     .attr('y', 0)
@@ -1769,6 +1849,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
       posTip.hide();
     });
     
+  // non-variants of pos_j
   parentGrp.append('rect')
     .attr('x', 0)
     .attr('y', function(d) {
@@ -1780,13 +1861,14 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     .attr('width', rectW)
     .style('fill', cGreen)
     .on('mouseover', function(d) {
-      tc = {pos: d.posj, opos: d.posi, am: amj(d), av: avj(d), mom: mimj(d), mov: vimj(d)};
+      tc = {pos: d.posj, opos: d.posi, am: amj(d), av: avj(d), mom: vimj(d), mov: mimj(d)};
       if (doTips) posTip.show(tc);
     })
     .on('mouseout', function(d) {
       posTip.hide();
     });
     
+  // variants of pos_i
   parentGrp.append('rect')
     .attr('x', width - rectW)
     .attr('y', 0)
@@ -1803,6 +1885,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
       posTip.hide();
     });
     
+  // non-variants of pos_i
   parentGrp.append('rect')
     .attr('x', width - rectW)
     .attr('y', function(d) {
@@ -1814,7 +1897,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     .attr('width', rectW)
     .style('fill', cGreen)
     .on('mouseover', function(d) {
-      tc = {pos: d.posi, opos: d.posj, am: ami(d), av: avi(d), mom: mimj(d), mov: mivj(d)};
+      tc = {pos: d.posi, opos: d.posj, am: ami(d), av: avi(d), mom: mivj(d), mov: mimj(d)};
       if (doTips) posTip.show(tc);
     })
     .on('mouseout', function(d) {
@@ -1927,7 +2010,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     })
     .style('fill', cRed)
     .on('mouseover', function(d) {
-      var tc = { thisCount: vivj(d), totali: vi(d), totalj: vj(d), i: d.posi, j: d.posj };
+      var tc = { thisCount: vivj(d), totali: avi(d), totalj: avj(d), i: d.posi, j: d.posj };
       if (doTips) linkTip.show(tc);
     })
     .on('mouseout', function(d) { linkTip.hide(); });
@@ -1948,7 +2031,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     })
     .style('fill', 'url(#modalToVar)')
     .on('mouseover', function(d) {
-      var tc = { thisCount: vimj(d), totali: vi(d), totalj: mj(d), i: d.posi, j: d.posj };
+      var tc = { thisCount: vimj(d), totali: avi(d), totalj: amj(d), i: d.posi, j: d.posj };
       if (doTips) linkTip.show(tc);
     })
     .on('mouseout', function(d) { linkTip.hide(); });
@@ -1970,7 +2053,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     })
     .style('fill', 'url(#varToModal)')
     .on('mouseover', function(d) {
-      var tc = { thisCount: mivj(d), totali: mi(d), totalj: vj(d), i: d.posi, j: d.posj };
+      var tc = { thisCount: mivj(d), totali: ami(d), totalj: avj(d), i: d.posi, j: d.posj };
       if (doTips) linkTip.show(tc);
     })
     .on('mouseout', function(d) { linkTip.hide(); });
@@ -1991,7 +2074,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     })
     .style('fill', cGreen)
     .on('mouseover', function(d) {
-      var tc = { thisCount: mimj(d), totali: mi(d), totalj: mj(d), i: d.posi, j: d.posj };
+      var tc = { thisCount: mimj(d), totali: ami(d), totalj: amj(d), i: d.posi, j: d.posj };
       if (doTips) linkTip.show(tc);
     })
     .on('mouseout', function(d) { linkTip.hide(); });
