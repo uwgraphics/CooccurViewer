@@ -8,6 +8,7 @@ var ds = {
 // JSON object to hold metrics for each pair of positions
 var metrics = {};
 var filtered = {};
+var refString = "";
 
 // keep track of any annotations we have
 var annotations = [];
@@ -182,6 +183,23 @@ var loadBinaryData = function(data, name) {
           
           metrics[i][j][name].push(newEntry);
         }
+      }
+    } else if (name == "refdata") {
+      while (dv.byteLength != offset) {
+        var thisByte = dv.getInt8(offset);
+        offset += 1;
+        
+        // TODO: positions that don't have a reference will default to A (bad?)
+        var bases = ['A', 'T', 'C', 'G'];
+        
+        var theseBases = "";
+        for (var n = 0; n < 4; n++) {
+          var thisBase = bases[thisByte & 3];
+          theseBases = thisBase + theseBases;
+          thisByte >>= 2;
+        }
+        
+        refString += theseBases;        
       }
     } else {      
       for (var n = 0; n < expectedPositions; n++) {
@@ -668,6 +686,10 @@ var loadDataset = function(datasetName, datasetObj) {
   
   if (datasetObj.hasOwnProperty('fullcounts')) {
     makeBinaryFileRequest(dataDir + datasetObj.fullcounts, 'fullcounts');
+  }
+  
+  if (datasetObj.hasOwnProperty('refdata')) {
+    makeBinaryFileRequest(dataDir + datasetObj.refdata, 'refdata');
   }
 };
 
