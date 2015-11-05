@@ -957,6 +957,39 @@ public class CoOccurLibrary {
 						os.writeInt(counts.getValue());
 					}
 				}
+
+				os.flush();
+				os.close();
+
+				// dump consensus/reference sequence as well (stuff 4 positions into one integer)
+				outputFile = OUTPUT_DIRECTORY + "reference.dat";
+				System.out.print("writing to " + outputFile + " ... \n");
+				os = new DataOutputStream(new FileOutputStream(outputFile));
+				
+				// write dimensions
+				os.writeInt(1);
+				os.writeInt(numPos);
+				os.writeInt(setHeaderFlags(true, true, 4, 4));
+				
+				int curByte = 0;
+				int numInByte = 0;
+				for (int n = 0; n < numPos; n++) {
+					if (++numInByte > 4) {
+						os.writeByte(curByte);
+						curByte = 0;
+						numInByte = 1;
+					}
+
+					int thisBase = getRefAtPos(n);
+					if (thisBase == -1) thisBase = 0; // default to A if no read exists here
+					curByte = curByte << 2 | thisBase;
+				}
+
+				// write out last byte
+				for (int n = numInByte; n < 4; n++) {
+					curByte <<= 2;
+				}
+				os.writeByte(curByte);
 				
 				os.flush();
 				os.close();
