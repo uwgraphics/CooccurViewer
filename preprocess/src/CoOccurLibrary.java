@@ -967,7 +967,7 @@ public class CoOccurLibrary {
 				os = new DataOutputStream(new FileOutputStream(outputFile));
 				
 				// write dimensions
-				os.writeInt(1);
+				os.writeInt(2 * windowSize + 1);
 				os.writeInt(numPos);
 				os.writeInt(setHeaderFlags(true, true, 4, 4));
 				
