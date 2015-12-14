@@ -8,7 +8,7 @@ var ds = {
 // JSON object to hold metrics for each pair of positions
 var metrics = {};
 var filtered = {};
-var refString = "";
+var refString = "-";
 
 // keep track of any annotations we have
 var annotations = [];
@@ -120,6 +120,7 @@ var loadBinaryData = function(data, name) {
   if (ds.numWindow == 0 || ds.numPos == 0) {
     ds.numWindow = thisNumWindow;
     ds.numPos = thisNumPos;
+    $("#numWindow").html(Math.floor(ds.numWindow / 2));
   }
 
   // set up bounds structure
@@ -134,6 +135,19 @@ var loadBinaryData = function(data, name) {
   } else {
     metrics['bounds'][name] = {max: -1000000, min: 1000000};
   }
+  
+  var createPairIfMissing = function(i, j) {
+    // create an entry for i if it doesn't exist
+    if (!metrics.hasOwnProperty(i))
+      metrics[i] = {};
+
+    // create an entry for i > j if it doesn't exist
+    if (!metrics[i].hasOwnProperty(j)) {
+      metrics[i][j] = {};
+      metrics[i][j]["posi"] = +i;
+      metrics[i][j]["posj"] = +j;
+    }
+  };
 
   // explode out the sparse representation to a full representation for the GPU
   var offset = headerSize;
@@ -143,6 +157,14 @@ var loadBinaryData = function(data, name) {
     // handle the special fullcounts file 
     // (which contains a sparse 4x4 matrix of bases for every co-occurrence)
     if (name == "fullcounts") {
+      
+      var bases = ['A', 'T', 'C', 'G'];
+      var getBasesFromByte = function(byte) {
+        var bi = bases[byte >> 2];
+        var bj = bases[byte & 3];
+        return bi + "," + bj;
+      };
+        
       while (dv.byteLength != offset) {
         var curIndex = dv.getInt32(offset);
         offset += 4;
@@ -151,25 +173,15 @@ var loadBinaryData = function(data, name) {
         var i = Math.floor(curIndex / ds.numWindow) + 1;
         var j = (i - 1) - Math.floor(ds.numWindow / 2) + (curIndex % ds.numWindow) + 1;
         
-        // create an entry for i if it doesn't exist
-        if (!metrics.hasOwnProperty(i))
-          metrics[i] = {};
-
-        // create an entry for i > j if it doesn't exist
-        if (!metrics[i].hasOwnProperty(j))
-          metrics[i][j] = {};
-          
-        metrics[i][j][name] = [];
-        
-        var bases = ['A', 'T', 'C', 'G'];
-        var getBasesFromByte = function(byte) {
-          var bi = bases[byte >> 2];
-          var bj = bases[byte & 3];
-          return bi + "," + bj;
-        };
-        
         var numEntries = dv.getInt8(offset);
         offset += 1;
+        
+        if (numEntries == 0)
+          continue;
+        
+        createPairIfMissing(i, j);
+        metrics[i][j][name] = [];
+        
         for (var n = 0; n < numEntries; n++) {
           var baseByte = dv.getInt8(offset);
           offset += 1;
@@ -210,13 +222,8 @@ var loadBinaryData = function(data, name) {
         var i = Math.floor(curIndex / ds.numWindow) + 1;
         var j = (i - 1) - Math.floor(ds.numWindow / 2) + (curIndex % ds.numWindow) + 1;
 
-        // create an entry for i if it doesn't exist
-        if (!metrics.hasOwnProperty(i))
-          metrics[i] = {};
-
-        // create an entry for i > j if it doesn't exist
-        if (!metrics[i].hasOwnProperty(j))
-          metrics[i][j] = {};
+        // create an entry for i, j if it doesn't exist
+        createPairIfMissing(i, j);
 
         // fill in the metric
         if (thisSpacing > 1) { 
@@ -265,13 +272,8 @@ var loadBinaryData = function(data, name) {
           var index_j = i - Math.floor(ds.numWindow / 2) + j + 1;
 
           // create an entry for i if it doesn't exist
-          if (!metrics.hasOwnProperty(index_i))
-            metrics[index_i] = {};
-
-          // create an entry for i > j if it doesn't exist
-          if (!metrics[index_i].hasOwnProperty(index_j))
-            metrics[index_i][index_j] = {};
-            
+          createPairIfMissing(index_i, index_j);
+          
           // if there is more than one possible value per position pair, 
           // create an entry for i > j > name > n
           if (thisSpacing > 1) {
@@ -358,7 +360,7 @@ var continueIfDone = function() {
     var curVal = metrics[i][j];
   
     if (!curVal.hasOwnProperty('depth') || !curVal.hasOwnProperty('counts')) {
-      console.log("failed to find 'depth' or 'counts', waiting...");
+      console.log("failed to find 'depth' or 'counts' (%s, %s), waiting...", i, j);
       return;
     }
       
@@ -369,6 +371,11 @@ var continueIfDone = function() {
         
       console.log("failed to find a metric when one was expected, waiting...");
       console.log(curVal);
+      return;
+    }
+    
+    if (!curVal.hasOwnProperty('fullcounts')) {
+      console.log("failed to find fullcounts");
       return;
     }
       
@@ -513,6 +520,10 @@ var filterData = function() {
         return;
       }
       
+      // calculate synonymy for those pairs that we care about (short-circuit if already calculated)
+      // getSynonymyCounts(curVal.posi, curVal.posj);
+      // var thisReads = getVariantMatrixAtPos(i, j);
+      
       var thisLevel = (curVal.counts[2] + curVal.counts[3]) / curVal.depth;
       if (thisLevel < minVariants)
         return;
@@ -523,12 +534,15 @@ var filterData = function() {
         return;
         
       // check for minimum co-occurrence metric
-      if (!curVal.hasOwnProperty('metric') || Math.abs(curVal.metric) < minMetric)
+      if (!curVal.hasOwnProperty('metric') || Math.abs($("#dosynonymy").prop('checked') ? curVal.metric_syn : curVal.metric) < minMetric)
         return;
         
-      curVal.posi = +i;
-      curVal.posj = +j;
-        
+      // curVal.posi = +i;
+      // curVal.posj = +j;
+
+      // calculate synonymy for those pairs that we care about (short-circuit if already calculated)
+      getSynonymyCounts(curVal.posi, curVal.posj);
+
       // if all other checks pass, copy to filtered
       // search if this i already exists: add if not, append to existing if so
       var foundExisting = false;
@@ -633,7 +647,10 @@ var progressStatus = '<div class="progs">' +
   '<span class="progValue" id="countsProgVal">0%</span><br />' +
   '<span id="metricStatus">Loading Metric</span>: ' +
   '<progress value="0" max="100" id="metricProg"></progress> ' +
-  '<span class="progValue" id="metricProgVal">100%</span>' +
+  '<span class="progValue" id="metricProgVal">0%</span><br />' +
+  '<span id="fullcountsStatus">Loading Base Counts</span>: ' +
+  '<progress value="0" max="100" id="fullcountsProg"></progress> ' +
+  '<span class="progValue" id="fullcountsProgVal">0%</span>' +
   '</div>';
 var geneColors;
 var loadDataset = function(datasetName, datasetObj) {
@@ -670,7 +687,7 @@ var loadDataset = function(datasetName, datasetObj) {
           var seqs = d.locations.split(";")
           seqs.forEach(function(seq) {
             pos = seq.split('-');
-            newAnnot = {min: pos[0], max: pos[1], name: d.gene, geneIndex: i, thisIndex: curIndex++};
+            newAnnot = {min: +pos[0], max: +pos[1], name: d.gene, geneIndex: i, thisIndex: curIndex++};
             annotatePos.push(newAnnot);
           });
         });
@@ -772,6 +789,148 @@ var generateAnnotationLayout = function() {
       layers[curLayer].push(domain.thisIndex);
     });
   });
+};
+
+// checks if this specific read (A, C, T, or G) is a variant at this position
+// -- the status of the synonymy checkbox (#dosynonymy) affects the outcome
+var DNACodonTable = { 
+  'TTT': 'F', 'TTC': 'F', 
+  'TTA': 'L', 'TTG': 'L', 'CTT': 'L', 'CTC': 'L', 'CTA': 'L', 'CTG': 'L',
+  'ATT': 'I', 'ATC': 'I', 'ATA': 'I',
+  'ATG': 'M',
+  'GTT': 'V', 'GTC': 'V', 'GTA': 'V', 'GTG': 'V',
+  'TCT': 'S', 'TCC': 'S', 'TCA': 'S', 'TCG': 'S',
+  'CCT': 'P', 'CCC': 'P', 'CCA': 'P', 'CCG': 'P',
+  'ACT': 'T', 'ACC': 'T', 'ACA': 'T', 'ACG': 'T',
+  'GCT': 'A', 'GCC': 'A', 'GCA': 'A', 'GCG': 'A',
+  'TAT': 'Y', 'TAC': 'Y', 
+  'TAA': 'stop', 'TAG': 'stop', 'TGA': 'stop',
+  'CAT': 'H', 'CAC': 'H',
+  'CAA': 'Q', 'CAG': 'Q',
+  'AAT': 'N', 'AAC': 'N',
+  'AAA': 'K', 'AAG': 'K',
+  'GAT': 'D', 'GAC': 'D',
+  'GAA': 'E', 'GAG': 'E',
+  'TGT': 'C', 'TGC': 'C',
+  'TGG': 'W',
+  'CGT': 'R', 'CGC': 'R', 'CGA': 'R', 'CGG': 'R',
+  'AGT': 'S', 'AGC': 'S',
+  'AGA': 'R', 'AGG': 'R',
+  'GGT': 'G', 'GGC': 'G', 'GGA': 'G', 'GGG': 'A'
+};
+var isReadVariant = function(read, pos) {
+  read = read.toUpperCase();
+  if (read.length != 1)
+    console.warning("Excpected one character for `read` to `isReadVariant` (got %d instead)", read.length);
+
+  // for each annotation that overlaps this position, check if the read at this position
+  // would result in a differently-coded amino-acid
+  // ...
+  // use the function `some` to immediately short-circuit if the read is a non-synoymous
+  // read in ANY reading frame.  returns false iff there is a synonymous read in all reading frames
+  return getAnnotationForPosition(pos).some(function(annotation) {
+    var gene = annotatePos.filter(function(d) { return d.name == annotation.gene; })[0];
+    var isBackward = gene.min > gene.max;
+    if (isBackward) {
+      var codonPos = Math.floor((pos - gene.min) / 3) * 3 + gene.min;
+      var readPosInCodon = (pos - gene.min) % 3;
+      var containingRefCodon = refString.substring(codonPos, codonPos - 3)
+        .split("").reverse().join("");
+        
+      //var containingCodon = containingRefCodon.substr(0, 
+      console.warn("NOT IMPLEMENTED FOR REVERSE READING FRAMES");
+    } else {
+      var codonPos = Math.floor((pos - gene.min) / 3) * 3 + gene.min;
+      var readPosInCodon = (pos - gene.min) % 3;
+      var containingRefCodon = refString.substring(codonPos, codonPos + 3);
+      var containingCodon = containingRefCodon.substr(0, readPosInCodon) + read 
+        + containingRefCodon.substr(readPosInCodon + 1);
+        
+      //console.log("comparing %s to reference %s (codon starts at %d, this position in codon is at %d)", containingCodon, containingRefCodon, codonPos, readPosInCodon);
+      return DNACodonTable[containingRefCodon] != DNACodonTable[containingCodon];
+    }
+  });
+};
+
+// given two positions i, j, calculate the number of variants, non-variants, and synoymic variants
+var getSynonymyCounts = function(i, j) {
+  if (metrics[i][j].hasOwnProperty('metric_syn'))
+    return;
+
+  metrics[i][j].fullcounts.forEach(function(pair) {
+    var read_i = pair.base.charAt(0);
+    var read_j = pair.base.charAt(2);
+    if (!metrics[i][j].fullcounts.hasOwnProperty('i')) {
+      pair.i = refString.charAt(i) == read_i ? "m" : isReadVariant(read_i, i) ? "v" : "s";
+      pair.j = refString.charAt(j) == read_j ? "m" : isReadVariant(read_j, j) ? "v" : "s";
+    }
+    
+    // add note about synonymous read to metrics entry (if it doesn't exist already)
+    if (pair.i == 's') {
+      if (!metrics[i][i].hasOwnProperty('synon'))
+        metrics[i][i].synon = read_i;
+      else if (metrics[i][i].synon.indexOf(read_i) == -1)
+        metrics[i][i].synon += read_i;
+    } 
+    
+    if (pair.j == 's') {
+      if (!metrics[j][j].hasOwnProperty('synon'))
+        metrics[j][j].synon = read_j;
+      else if (metrics[j][j].synon.indexOf(read_j) == -1)
+        metrics[j][j].synon += read_j;
+    }
+  });
+  
+  // add synonymy metric to pair
+  var r = getVariantMatrixAtPosSyn(i, j, true);
+
+  var vi = r.vimj + r.vivj;
+  var mi = r.mimj + r.mivj;
+  var Pvjvi = vi == 0 ? 0 : r.vivj / vi;
+  var Pvjmi = mi == 0 ? 0 : r.mivj / mi;
+  metrics[i][j].metric_syn = Pvjvi - Pvjmi;
+};
+
+var getSynAtPos = function(pos) {
+  return metrics[pos][pos].synon;
+};
+
+var isSynAtPos = function(read, pos) {
+  var syns = metrics[pos][pos].synon;
+  if (syns)
+    return metrics[pos][pos].synon.indexOf(read) != -1;
+  else
+    return false;
+}
+
+var readAtPos = function(read, pos) {
+  if (read == refString.charAt(pos))
+    return 'm';
+  if (isSynAtPos(read, pos))
+    return 's';
+  
+  return 'v';
+};
+
+var getVariantMatrixAtPos = function(i, j) {
+  return getVariantMatrixAtPosSyn(i, j, $("#dosynonymy").prop('checked'));
+};
+
+var getVariantMatrixAtPosSyn = function(i, j, isSyn) {
+  var curCounts = metrics[i][j].fullcounts;
+  
+  var imreads = refString.charAt(i) + (isSyn ? metrics[i][i].synon || "" : "");
+  var jmreads = refString.charAt(j) + (isSyn ? metrics[j][j].synon || "" : "");
+  var ivread = function(countEntry) { return imreads.indexOf(countEntry.base.charAt(0)) == -1; };
+  var jvread = function(countEntry) { return jmreads.indexOf(countEntry.base.charAt(2)) == -1; };
+  
+  var ret = {};
+  ret['vivj'] = d3.sum(curCounts.filter(function(d) { return  ivread(d) &&  jvread(d); }), function(d) { return d.num; });
+  ret['vimj'] = d3.sum(curCounts.filter(function(d) { return  ivread(d) && !jvread(d); }), function(d) { return d.num; });
+  ret['mivj'] = d3.sum(curCounts.filter(function(d) { return !ivread(d) &&  jvread(d); }), function(d) { return d.num; });
+  ret['mimj'] = d3.sum(curCounts.filter(function(d) { return !ivread(d) && !jvread(d); }), function(d) { return d.num; });
+  
+  return ret;
 };
 
 var checkFilterEntry = function(i, j) {
@@ -894,7 +1053,7 @@ var geneTip = d3.tip()
   });
 overview.call(geneTip);
 
-// TODO: want the layout to be something like:
+// TODO: want the layout to be something like:  
 // position        proportion of total for position
 //   537                   767/800 (95.9%)
 var linkTip = d3.tip()
@@ -902,14 +1061,56 @@ var linkTip = d3.tip()
   .attr('class', 'd3-tip')
   .offset([-7, 0])
   .html(function(d) {
+    var pos1 = d.i > d.j ? d.j : d.i;
+    var pos2 = d.j > d.i ? d.j : d.i;
+    
+    // always keep lower position first (practioner-ask)
+    var iIsFirst = d.i < d.j;
+    
     var ret = "Found " + dispNum(d.thisCount) + " reads.<br />";
     ret += "<table><thead><tr>";
-    ret += "<th>Position</th><th>Proportion of total for position</th>";
-    ret += "</tr></thead><tbody><tr>";
-    ret += "<td>"+d.i+"</td><td>"+dispNum(d.thisCount)+" / "+dispNum(d.totali)+" ("+((d.thisCount/d.totali) * 100).toFixed(1)+ "%)</td>";
-    ret += "</tr><tr>";
-    ret += "<td>"+d.j+"</td><td>"+dispNum(d.thisCount)+" / "+dispNum(d.totalj)+" ("+((d.thisCount/d.totalj) * 100).toFixed(1)+ "%)</td>";
-    ret += "</tr></tbody></table>";
+    ret += "<th>" + pos1 + "</th><th>" + pos2 + "</th><th># reads</th><th></th>";
+    ret += "</tr></thead><tbody>";
+    
+    // select just those reads that MAKE SENSE (given vari, varj)
+    var refi = refString.charAt(d.i) + ($('#dosynonymy').prop('checked') ? metrics[d.i][d.i].synon || "" : "");
+    var refj = refString.charAt(d.j) + ($('#dosynonymy').prop('checked') ? metrics[d.j][d.j].synon || "" : "");
+    var countScale = d3.scale.linear()
+      .domain([0, d.thisCount]).range([1, 100]);
+    metrics[d.i][d.j].fullcounts.filter(function(e) { 
+      // filter iff XOR is true
+      if (refi.indexOf(e.base.charAt(0)) != -1 ? !d.vari : d.vari) {
+        if (refj.indexOf(e.base.charAt(2)) != -1 ? !d.varj : d.varj) {
+          return true;
+        }
+      }
+      
+      return false;
+    }).forEach(function(e) {
+      var bases = e.base.split(",");
+      if (!iIsFirst) bases.reverse();
+      
+      var cPos1 = cGreen, cPos2 = cGreen;
+      if (refString.charAt(pos1) != bases[0]) {
+        if (isSynAtPos(bases[0], pos1))
+          cPos1 = cWhite;
+        else
+          cPos1 = cRed;
+      } if (refString.charAt(pos2) != bases[1]) {
+        if (isSynAtPos(bases[1], pos2))
+          cPos2 = cWhite
+        else
+          cPos2 = cRed;
+      }
+      
+      ret += '<tr><td style="color: '+cPos1+'; font-weight: bold;">' + bases[0] + '</td>';
+      ret += '<td style="color: '+cPos2+'; font-weight: bold;">' + bases[1] + '</td>';
+      ret += '<td style="text-align: right;">' + dispNum(e.num);
+      ret += '</td><td style="text-align: left;">';
+      ret += '<div class="sparkbar" style="width: ' + countScale(e.num) + 'px;"></div></td></tr>';
+    });
+    
+    ret += "</tbody></table>";
     
     return ret;
   });
@@ -923,6 +1124,13 @@ var posTip = d3.tip()
   .offset([-7, 0])
   .html(function(d) {
     ret = 'Position '+d.pos+' <span class="subtitle">(found ' + dispNum(d.av+d.am) + ' reads)</span>';
+    
+    if (refString.length > 1) {
+      ret += '<br/><span class="subtitle">Reference read: <b>' + refString.charAt(d.pos) + '</b>';
+      if (metrics[d.pos][d.pos].hasOwnProperty('synon'))
+        ret += ' <small>(synonym reads: <b>' + metrics[d.pos][d.pos].synon.split("").join(", ") + '</b>)</small>';
+      ret += '</span>';
+    }
     
     // ask the annotations if any overlap this position
     var genes = getAnnotationForPosition(d.pos).map(function(thisGene, i) {
@@ -954,6 +1162,19 @@ var posTip = d3.tip()
       ret += '</div></div>';
     }
     
+    ret += '<div class="breakdown">Reads at this position';
+    ret += '<div class="moredetails"><table>';
+    var sparkScale = d3.scale.linear()
+      .domain([0, d.av + d.am]).range([1, 50]);
+      
+    metrics[d.pos][d.pos].fullcounts.forEach(function(e) {
+      var textColor = e.base.charAt(0) == refString.charAt(d.pos) ? cGreen : 
+        metrics[d.pos][d.pos].synon && metrics[d.pos][d.pos].synon.indexOf(e.base.charAt(0)) != -1 ? 
+          cWhite : cRed;
+      ret += '<tr style="color: ' + textColor + ';"><td>' + e.base.charAt(0) + '</td><td style="text-align: right;">' + dispNum(e.num);
+      ret += '</td><td><div class="sparkbar" style="width: ' + sparkScale(e.num) + 'px;"></div></td></tr>';
+    });
+    
     return ret;
   });
 overview.call(posTip);
@@ -961,6 +1182,7 @@ overview.call(posTip);
 var cRed = 'rgb(197,65,65)';
 var cGreen = 'rgb(153,207,153)';
 var cGray = 'rgba(128,128,128,0.5)';
+var cWhite = '#ddd';
     
 var detailView = d3.select("#d3canvas")
   .append('g')
@@ -1410,15 +1632,12 @@ var updateVis = function() {
     .attr('height', miniBarY.rangeBand())
     .attr('width', x.rangeBand())
     .style('fill', function(d) {
-      var imax = d3.max(d.relatedPairs, function(e) {
-        return (e.counts[2] + e.counts[3]) / e.depth;
+      var thisMax = d3.max(d.relatedPairs, function(e) {
+        var c = getVariantMatrixAtPosSyn(e.posi, e.posj);
+        return Math.max(c.vivj + c.vimj, c.vivj + c.mivj) / e.depth;
       });
       
-      var jmax = d3.max(d.relatedPairs, function(e) {
-        return (e.counts[1] + e.counts[3]) / e.depth;
-      });
-      
-      return variantScale(Math.max(imax, jmax));
+      return variantScale(thisMax);
     });
     
   newPos.append('rect')
@@ -1430,7 +1649,7 @@ var updateVis = function() {
     .style('fill', function(d) {
       return metricScale(
         d3.max(d.relatedPairs, function(e) { 
-          return Math.abs(e.metric); 
+          return Math.abs($("#dosynonymy").prop('checked') ? e.metric_syn : e.metric); 
         })
       );
     });
@@ -1550,6 +1769,9 @@ var makeColorRampAbsPos = function(type, parent, x, y, label, title, width, heig
   switch (type) {
     case 'metric':
       scale = metricColorScale;
+      calcVar = function(d) {
+        return $("#dosynonymy").prop('checked') ? d.metric_syn : d.metric;
+      };
       break;
     case 'depth':
       scale = depthScale;
@@ -1557,13 +1779,15 @@ var makeColorRampAbsPos = function(type, parent, x, y, label, title, width, heig
     case 'vari':
       scale = variantScale;
       calcVar = function(d) {
-        return (d.counts[2] + d.counts[3]) / d.depth;
+        var c = getVariantMatrixAtPos(d.posi, d.posj);
+        return (c.vivj + c.vimj) / d.depth;
       };
       break;
     case 'varj':
       scale = variantScale;
       calcVar = function(d) {
-        return (d.counts[1] + d.counts[3]) / d.depth;
+        var c = getVariantMatrixAtPos(d.posi, d.posj);
+        return (c.vivj + c.mivj) / d.depth;
       };
       break;
     default:
@@ -1653,7 +1877,7 @@ var updateDetail = function(page) {
   curDetail = detailData.slice(page * pageSize, page * pageSize + pageSize);
 
   var jpos = detailView.selectAll('g.jpos')
-    .data(curDetail, function(d) { return d.posi + "," + d.posj }); 
+    .data(curDetail, function(d) { return d.posi + "," + d.posj; }); 
     
   // handle pagination of detail views (and remove old div)
   d3.selectAll('g.pagin').remove();
@@ -1745,7 +1969,7 @@ var updateDetail = function(page) {
     
   makeColorRampAbsPos('metric', newDetail, 25, 145,
     function(d) { 
-      return d.metric.toFixed(3);
+      return $("#dosynonymy").prop('checked') ? d.metric_syn.toFixed(3) : d.metric.toFixed(3);
     }, "correlation");
     
   makeColorRampAbsPos('depth', newDetail, 125, 145,
@@ -1755,12 +1979,14 @@ var updateDetail = function(page) {
     
   makeColorRampAbsPos('vari', newDetail, 225, 145,
     function(d) {
-      return ((d.counts[2] + d.counts[3]) / d.depth * 100).toFixed(1) + "%"; 
+      var c = getVariantMatrixAtPos(d.posi, d.posj);
+      return ((c.vivj + c.vimj) / d.depth * 100).toFixed(1) + "%"; 
     }, "variants");
     
   makeColorRampAbsPos('varj', newDetail, 225, 190,
     function(d) {
-      return ((d.counts[1] + d.counts[3]) / d.depth * 100).toFixed(1) + "%";
+      var c = getVariantMatrixAtPos(d.posi, d.posj);
+      return ((c.vivj + c.mivj) / d.depth * 100).toFixed(1) + "%";
     });
     
   // handle making the correlation curves
@@ -1833,6 +2059,75 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
   var vimj = function(curData) { return curData.counts[2]; };
   var mivj = function(curData) { return curData.counts[1]; };
   var mimj = function(curData) { return curData.counts[0]; };
+  
+  var imreads = function(d) { return refString.charAt(d.posi) + (metrics[d.posi][d.posi].synon || ""); };
+  var jmreads = function(d) { return refString.charAt(d.posj) + (metrics[d.posj][d.posj].synon || ""); };
+  var ivread = function(d, fullcount) { return imreads(d).indexOf(fullcount.base.charAt(0)) == -1; };
+  var jvread = function(d, fullcount) { return jmreads(d).indexOf(fullcount.base.charAt(2)) == -1; };
+  
+  if ($("#dosynonymy").prop('checked')) {
+    // for every pair of reads at this position, check if either side is synonymous and update counts accordingly
+    
+    vi = function(d) { 
+      var count = d.fullcounts.filter(function(e) { return ivread(d, e); });
+      return d3.sum(count, function(e) { return e.num });
+    };
+    
+    mi = function(d) {
+      var count = d.fullcounts.filter(function(e) { return !ivread(d, e); });
+      return d3.sum(count, function(e) { return e.num });
+    };
+    
+    vj = function(d) {
+      var count = d.fullcounts.filter(function(e) { return jvread(d, e); });
+      return d3.sum(count, function(e) { return e.num; });
+    };
+    
+    mj = function(d) {
+      var count = d.fullcounts.filter(function(e) { return !jvread(d, e); });
+      return d3.sum(count, function(e) { return e.num; });
+    };
+    
+    avi = function(d) {
+      var count = metrics[d.posi][d.posi].fullcounts.filter(function(e) { return ivread(d, e); });
+      return d3.sum(count, function(e) { return e.num; });
+    };
+    
+    ami = function(d) {
+      var count = metrics[d.posi][d.posi].fullcounts.filter(function(e) { return !ivread(d, e); });
+      return d3.sum(count, function(e) { return e.num; });
+    };
+    
+    avj = function(d) {
+      var count = metrics[d.posj][d.posj].fullcounts.filter(function(e) { return jvread(d, e); });
+      return d3.sum(count, function(e) { return e.num; });
+    };
+    
+    amj = function(d) {
+      var count = metrics[d.posj][d.posj].fullcounts.filter(function(e) { return !jvread(d, e); });
+      return d3.sum(count, function(e) { return e.num; });
+    };
+    
+    vivj = function(d) {
+      var count = d.fullcounts.filter(function(e) { return ivread(d,e) && jvread(d,e); });
+      return d3.sum(count, function(e) { return e.num; });
+    };
+    
+    vimj = function(d) { 
+      var count = d.fullcounts.filter(function(e) { return ivread(d,e) && !jvread(d,e); });
+      return d3.sum(count, function(e) { return e.num; });
+    };
+    
+    mivj = function(d) {
+      var count = d.fullcounts.filter(function(e) { return !ivread(d,e) && jvread(d,e); });
+      return d3.sum(count, function(e) { return e.num; });
+    };
+    
+    mimj = function(d) {
+      var count = d.fullcounts.filter(function(e) { return !ivread(d,e) && !jvread(d,e); });
+      return d3.sum(count, function(e) { return e.num; });
+    };
+  };
 
   
   // add in the paths now
@@ -2032,7 +2327,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     })
     .style('fill', cRed)
     .on('mouseover', function(d) {
-      var tc = { thisCount: vivj(d), totali: avi(d), totalj: avj(d), i: d.posi, j: d.posj };
+      var tc = { thisCount: vivj(d), totali: avi(d), totalj: avj(d), i: d.posi, j: d.posj, vari: true, varj: true };
       if (doTips) linkTip.show(tc);
     })
     .on('mouseout', function(d) { linkTip.hide(); });
@@ -2053,7 +2348,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     })
     .style('fill', 'url(#modalToVar)')
     .on('mouseover', function(d) {
-      var tc = { thisCount: vimj(d), totali: avi(d), totalj: amj(d), i: d.posi, j: d.posj };
+      var tc = { thisCount: vimj(d), totali: avi(d), totalj: amj(d), i: d.posi, j: d.posj, vari: true, varj: false };
       if (doTips) linkTip.show(tc);
     })
     .on('mouseout', function(d) { linkTip.hide(); });
@@ -2075,7 +2370,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     })
     .style('fill', 'url(#varToModal)')
     .on('mouseover', function(d) {
-      var tc = { thisCount: mivj(d), totali: ami(d), totalj: avj(d), i: d.posi, j: d.posj };
+      var tc = { thisCount: mivj(d), totali: ami(d), totalj: avj(d), i: d.posi, j: d.posj, vari: false, varj: true };
       if (doTips) linkTip.show(tc);
     })
     .on('mouseout', function(d) { linkTip.hide(); });
@@ -2096,7 +2391,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     })
     .style('fill', cGreen)
     .on('mouseover', function(d) {
-      var tc = { thisCount: mimj(d), totali: ami(d), totalj: amj(d), i: d.posi, j: d.posj };
+      var tc = { thisCount: mimj(d), totali: ami(d), totalj: amj(d), i: d.posi, j: d.posj, vari: false, varj: false };
       if (doTips) linkTip.show(tc);
     })
     .on('mouseout', function(d) { linkTip.hide(); });
@@ -2203,6 +2498,54 @@ $(document).ready(function() {
     // draw the visualization from scratch
     firstRun = true;
     continueIfDone();
+  });
+  
+  var synChange = function() {
+    $("#keepsynonpairs").prop('disabled', !$("#dosynonymy").prop('checked'));
+    
+    // filter in all cases unless both checkboxes are checked
+    if (!($("#keepsynonpairs").prop('checked') && $("#dosynonymy").prop('checked')))
+      filterData();
+      
+    updateVis();
+    d3.selectAll("g.jpos").remove();
+    if (detailData.length != 0) 
+      updateDetail(curPage || 0);
+    
+    // after all requested filtering is done, keep disabled checkbox checked
+    if (!$("#dosynonymy").prop('checked')) $("#keepsynonpairs").prop('checked', true);
+  };
+  
+  $("#dosynonymy").change(synChange);
+  $("#keepsynonpairs").change(synChange);
+  
+  $("#customPairSubmit").click(function(e) {
+    e.preventDefault(); // don't reload the page
+  
+    var pos1 = +$("#pickedPos1").val();
+    var pos2 = +$("#pickedPos2").val();
+    
+    if (!metrics.hasOwnProperty(pos1) || !metrics[pos1].hasOwnProperty(pos2)) {
+      $("#custompairFeedback").css('display', 'block');
+      return;
+    }
+    
+    // hide the modal dialog
+    $("#custompair").modal('hide');
+    
+    
+    getSynonymyCounts(pos1, pos2);
+    detailData = [metrics[pos1][pos2]];
+    updateDetail();
+  });
+  
+  // hide the error message whenever the modal is hidden
+  $("#custompair").on('hidden.bs.modal', function() { 
+    $("#custompairFeedback").css('display', 'none');
+  });
+  
+  $("#custompair").on('shown.bs.modal', function() {
+    $("#pickedPos1").focus();
   });
   
   // continueIfDone() will handle the rest once the files are loaded

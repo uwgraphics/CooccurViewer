@@ -457,4 +457,14 @@ svg .axis text {
 	margin: 7px 0 0 20px;
 }
 
+#posTip table {
+	width: 200px;
+}
 
+#posTip table div.sparkbar, #linkTip table div.sparkbar {
+	display: inline-block;
+	height: 15px;
+	width: 50px; /* overridden by data */
+	margin-left: 10px;
+	background-color: teal;
+}
