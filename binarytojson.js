@@ -54,10 +54,12 @@ var counts = {};
 var loadBinaryData = function(data, name) {
   ready = false;
 
+  console.log("trying to parse file %s", name)
   console.time("parsing file " + name);
   //updateLoadingStatus("parsing " + name + " file...");
 
   var dv = new DataView(data);
+  console.log("%s has size %d (%s MB)", name, dv.byteLength, (dv.byteLength / 1024 / 1024).toFixed(1));
 
   var thisNumWindow = dv.getInt32(0);
   var thisNumPos = dv.getInt32(4);
@@ -165,7 +167,12 @@ var loadBinaryData = function(data, name) {
         return bi + "," + bj;
       };
         
+      var counter = 0;
       while (dv.byteLength != offset) {
+        if (++counter % 10000 === 0) {
+          console.log("fullcounts checkpoint (%s% done)", (offset / dv.byteLength * 100).toFixed(2));
+        }
+        
         var curIndex = dv.getInt32(offset);
         offset += 4;
         
@@ -197,6 +204,7 @@ var loadBinaryData = function(data, name) {
         }
       }
     } else if (name == "refdata") {
+      refString = "-";
       while (dv.byteLength != offset) {
         var thisByte = dv.getInt8(offset);
         offset += 1;
@@ -343,45 +351,37 @@ var continueIfDone = function() {
   
   var theIs = Object.keys(metrics);
   
-  // spin until all files have been parsed
   if (theIs.length == 0)
     return;
-    
-  // it's possible that metric might be 'null' or not present if the co-occurrence value is zero.
-  // try a bunch of random values until we find one that is not or where we expect the co-occurrence
-  // value to not be zero (e.g. counts[1] + counts[2] + counts[3] != 0)
-  while (true) {
-     // get an arbitrary index to play with
+  
+  // spin until all files have been parsed
+  var counter = 10;
+  while (--counter > 0) {
+    // get an arbitrary index to play with
     var i = theIs[Math.floor(Math.random() * theIs.length)];
-
+  
     var theJs = Object.keys(metrics[i]);
     var j = theJs[Math.floor(Math.random() * theJs.length)];
     
     var curVal = metrics[i][j];
   
-    if (!curVal.hasOwnProperty('depth') || !curVal.hasOwnProperty('counts')) {
-      console.log("failed to find 'depth' or 'counts' (%s, %s), waiting...", i, j);
+    if (!curVal.hasOwnProperty('depth')) {
+      console.log("failed to find 'depth' (%s, %s), waiting...", i, j);
       return;
     }
       
-    // metric should only be missing if no variants at either position (assume metric isn't loaded yet)
-    if (!curVal.hasOwnProperty('metric') && curVal.depth != curVal.counts[0] + curVal.counts[2]) {
-      if (curVal.depth == curVal.counts[0] + curVal.counts[2])
-        continue;
-        
-      console.log("failed to find a metric when one was expected, waiting...");
-      console.log(curVal);
-      return;
-    }
-    
     if (!curVal.hasOwnProperty('fullcounts')) {
       console.log("failed to find fullcounts");
       return;
     }
-      
-    // break out if we found a metric property
-    if (curVal.hasOwnProperty('metric'))
-      break;
+    
+    
+    // metric should only be missing if no variants at either position (assume metric isn't loaded yet)
+    if (!curVal.hasOwnProperty('metric')) {  
+      console.log("failed to find a metric when one was expected, waiting...");
+      console.log(curVal);
+      continue;
+    }
   }
   
   // set a visibility field
@@ -423,11 +423,12 @@ var collectStats = function() {
       if (curPair.hasOwnProperty('depth'))
         threshCounts.depth.push(curPair.depth);
       
+      var thisCounts = getVariantMatrixAtPos(curPair.posi, curPair.posj);
       if (curPair.hasOwnProperty('counts')) {
         threshCounts.variant.push(
           Math.min(
-            (curPair.counts[2] + curPair.counts[3]) / curPair.depth,
-            (curPair.counts[1] + curPair.counts[3]) / curPair.depth
+            (thisCounts.vivj + thisCounts.vimj) / curPair.depth,
+            (thisCounts.vivj + thisCounts.mivj) / curPair.depth
           )
         );
       }
@@ -459,13 +460,14 @@ var tryCollectStats = function() {
         return;
       }
       
-      var varLevel = (curVal.counts[2] + curVal.counts[3]) / curVal.depth;
+      var thisCounts = getVariantMatrixAtPos(curI, curJ);
+      var varLevel = (thisCounts.vivj + thisCounts.vimj) / curVal.depth;
       if (varLevel < minVariants) {
         metrics[curI][curJ].visible = false;
         return;
       }
       
-      varLevel = (curVal.counts[1] + curVal.counts[3]) / curVal.depth;
+      varLevel = (thisCounts.vivj + thisCounts.mivj) / curVal.depth;
       if (varLevel < minVariants) {
         metrics[curI][curJ].visible = false;
         return;
@@ -515,33 +517,34 @@ var filterData = function() {
         return;
         
       // calculate the level of variance
-      if (!curVal.hasOwnProperty('counts')) {
-        console.log("missing counts from " + i + ", " + j);
-        return;
-      }
+      // if (!curVal.hasOwnProperty('counts')) {
+      //   console.log("missing counts from " + i + ", " + j);
+      //   return;
+      // }
       
       // calculate synonymy for those pairs that we care about (short-circuit if already calculated)
-      // getSynonymyCounts(curVal.posi, curVal.posj);
+      getSynonymyCounts(curVal.posi, curVal.posj);
       // var thisReads = getVariantMatrixAtPos(i, j);
       
-      var thisLevel = (curVal.counts[2] + curVal.counts[3]) / curVal.depth;
+      var thisCounts = getVariantMatrixAtPos(i, j);
+      var thisLevel = (thisCounts.vivj + thisCounts.vimj) / curVal.depth;
       if (thisLevel < minVariants)
         return;
         
       // do we enforce a minimum variance for j as well?
-      thisLevel = (curVal.counts[1] + curVal.counts[3]) / curVal.depth;
+      thisLevel = (thisCounts.vivj + thisCounts.mivj) / curVal.depth;
       if (minVarJ && thisLevel < minVariants)
         return;
         
       // check for minimum co-occurrence metric
-      if (!curVal.hasOwnProperty('metric') || Math.abs($("#dosynonymy").prop('checked') ? curVal.metric_syn : curVal.metric) < minMetric)
+      if (Math.abs(!curVal.hasOwnProperty('metric') || $("#dosynonymy").prop('checked') ? curVal.metric_syn : curVal.metric) < minMetric)
         return;
         
       // curVal.posi = +i;
       // curVal.posj = +j;
 
       // calculate synonymy for those pairs that we care about (short-circuit if already calculated)
-      getSynonymyCounts(curVal.posi, curVal.posj);
+      // getSynonymyCounts(curVal.posi, curVal.posj);
 
       // if all other checks pass, copy to filtered
       // search if this i already exists: add if not, append to existing if so
@@ -594,9 +597,10 @@ var updateHistograms = function() {
         break;
       case 'variant':
         typeVals = flatMetrics.map(function(d) {
+          var thisCounts = getVariantMatrixAtPos(d.posi, d.posj);
           return Math.min(
-            (d.counts[2] + d.counts[3]) / d.depth,
-            (d.counts[1] + d.counts[3]) / d.depth
+            (thisCounts.vivj + thisCounts.vimj) / d.depth,
+            (thisCounts.vivj + thisCounts.mivj) / d.depth
           );
         });
         break;
@@ -642,9 +646,6 @@ var progressStatus = '<div class="progs">' +
   '<span id="depthStatus">Loading Depth</span>: ' +
   '<progress value="0" max="100" id="depthProg"></progress> ' +
   '<span class="progValue" id="depthProgVal">0%</span><br />' +
-  '<span id="countsStatus">Loading Counts</span>: ' +
-  '<progress value="0" max="100" id="countsProg"></progress> ' +
-  '<span class="progValue" id="countsProgVal">0%</span><br />' +
   '<span id="metricStatus">Loading Metric</span>: ' +
   '<progress value="0" max="100" id="metricProg"></progress> ' +
   '<span class="progValue" id="metricProgVal">0%</span><br />' +
@@ -673,7 +674,6 @@ var loadDataset = function(datasetName, datasetObj) {
   tip.hide();
   
   makeBinaryFileRequest(dataDir + datasetObj.attenuation, 'depth');
-  makeBinaryFileRequest(dataDir + datasetObj.variantCounts, 'counts');
   makeBinaryFileRequest(dataDir + datasetObj.metrics[0], 'metric');
   
   if (datasetObj.hasOwnProperty('annotations')) {
@@ -1126,9 +1126,9 @@ var posTip = d3.tip()
     ret = 'Position '+d.pos+' <span class="subtitle">(found ' + dispNum(d.av+d.am) + ' reads)</span>';
     
     if (refString.length > 1) {
-      ret += '<br/><span class="subtitle">Reference read: <b>' + refString.charAt(d.pos) + '</b>';
+      ret += '<br/><span class="subtitle">Ref. nucleotide: <b>' + refString.charAt(d.pos) + '</b>';
       if (metrics[d.pos][d.pos].hasOwnProperty('synon'))
-        ret += ' <small>(synonym reads: <b>' + metrics[d.pos][d.pos].synon.split("").join(", ") + '</b>)</small>';
+        ret += ' <small>(synonym nucleotides: <b>' + metrics[d.pos][d.pos].synon.split("").join(", ") + '</b>)</small>';
       ret += '</span>';
     }
     
@@ -1147,22 +1147,22 @@ var posTip = d3.tip()
       ret += ' reads are variant.';
       ret += '<div class="moredetails">' + dispNum(d.nv) + '  (' + (d.nv/d.av*100).toFixed(1) + '%)';
       ret += ' do not overlap ' + d.opos + '<br />';
-      ret += dispNum(d.vov) + ' (' + (d.vov/d.av*100).toFixed(1) + '%) map to variants at ' + d.opos + '<br />';
-      ret += dispNum(d.vom) + ' (' + (d.vom/d.av*100).toFixed(1) + '%) map to non-variants at ' + d.opos;
+      ret += dispNum(d.vov) + ' (' + (d.vov/d.av*100).toFixed(1) + '%) link to variants at ' + d.opos + '<br />';
+      ret += dispNum(d.vom) + ' (' + (d.vom/d.av*100).toFixed(1) + '%) link to reference at ' + d.opos;
       ret += '</div></div>';
     } else {
       d.nm = d.am - d.mom - d.mov;
     
       ret += '<div class="breakdown">' + dispNum(d.am) + ' (' + (d.am/(d.av+d.am) * 100).toFixed(1) + '% of total)';
-      ret += ' reads are non-variant.';
+      ret += ' reads are wild-type.';
       ret += '<div class="moredetails">' + dispNum(d.nm) + '  (' + (d.nm/d.am*100).toFixed(1) + '%)';
       ret += ' do not overlap ' + d.opos + '<br />';
-      ret += dispNum(d.mom) + ' (' + (d.mom/d.am*100).toFixed(1) + '%) map to variants at ' + d.opos + '<br />';
-      ret += dispNum(d.mov) + ' (' + (d.mov/d.am*100).toFixed(1) + '%) map to non-variants at ' + d.opos;
+      ret += dispNum(d.mom) + ' (' + (d.mom/d.am*100).toFixed(1) + '%) link to variants at ' + d.opos + '<br />';
+      ret += dispNum(d.mov) + ' (' + (d.mov/d.am*100).toFixed(1) + '%) link to reference at ' + d.opos;
       ret += '</div></div>';
     }
     
-    ret += '<div class="breakdown">Reads at this position';
+    ret += '<div class="breakdown">Nucleotides at this position';
     ret += '<div class="moredetails"><table>';
     var sparkScale = d3.scale.linear()
       .domain([0, d.av + d.am]).range([1, 50]);
@@ -1860,6 +1860,19 @@ var makeColorRampAbsPos = function(type, parent, x, y, label, title, width, heig
     .attr('y', -5)
     .attr('text-anchor', 'middle')
     .text(title);
+    
+    
+  if (type == "vari") {
+    ramp.append('text')
+      .attr('x', width + 7)
+      .attr('y', 7)
+      .text(function(d) { return d.posi; });
+  } else if (type == "varj") {
+    ramp.append('text')
+      .attr('x', width + 7)
+      .attr('y', 7)
+      .text(function(d) { return d.posj; });
+  }
 };
 
 var curDetail = [];
@@ -1967,23 +1980,23 @@ var updateDetail = function(page) {
       'translate(' + (detailWidth + 10) + "," + Math.floor(y.rangeBand() * 0.1) + ")"
     );
     
-  makeColorRampAbsPos('metric', newDetail, 25, 145,
+  makeColorRampAbsPos('metric', newDetail, 15, 145,
     function(d) { 
       return $("#dosynonymy").prop('checked') ? d.metric_syn.toFixed(3) : d.metric.toFixed(3);
     }, "correlation");
     
-  makeColorRampAbsPos('depth', newDetail, 125, 145,
+  makeColorRampAbsPos('depth', newDetail, 115, 145,
     function(d) {
       return (d.depth / metrics['bounds']['depth']['max'] * 100).toFixed(2) + "%";
     }, "depth");
     
-  makeColorRampAbsPos('vari', newDetail, 225, 145,
+  makeColorRampAbsPos('vari', newDetail, 215, 145,
     function(d) {
       var c = getVariantMatrixAtPos(d.posi, d.posj);
       return ((c.vivj + c.vimj) / d.depth * 100).toFixed(1) + "%"; 
     }, "variants");
     
-  makeColorRampAbsPos('varj', newDetail, 225, 190,
+  makeColorRampAbsPos('varj', newDetail, 215, 190,
     function(d) {
       var c = getVariantMatrixAtPos(d.posi, d.posj);
       return ((c.vivj + c.mivj) / d.depth * 100).toFixed(1) + "%";
@@ -2035,100 +2048,23 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
   var s = function(curData, counts) { 
     return detailScales[curData.posi + "," + curData.posj](counts);
   };
+
+  var pairCounts = function(d, compute) { return compute(getVariantMatrixAtPos(d.posi, d.posj)); };
+  var vi = function(d) { return pairCounts(d, function(c) { return c.vivj + c.vimj; }) };
+  var mi = function(d) { return pairCounts(d, function(c) { return c.mivj + c.mimj; }) };
+  var vj = function(d) { return pairCounts(d, function(c) { return c.vivj + c.mivj; }) };
+  var mj = function(d) { return pairCounts(d, function(c) { return c.vimj + c.mimj; }) };
   
-  var w = function(curData, isVar, isI) {
-    var c = isI ? 
-      metrics[curData.posi][curData.posi].counts : 
-      metrics[curData.posj][curData.posj].counts;
-    
-    return isVar ? c[3] : c[0];
-  };
-
-  // some helper functions
-  var vi = function(curData) { return curData.counts[2] + curData.counts[3]; };
-  var mi = function(curData) { return curData.counts[0] + curData.counts[1]; };
-  var vj = function(curData) { return curData.counts[1] + curData.counts[3]; };
-  var mj = function(curData) { return curData.counts[0] + curData.counts[2]; };
-
-  var avi = function(curData) { return metrics[curData.posi][curData.posi].counts[3]; };
-  var ami = function(curData) { return metrics[curData.posi][curData.posi].counts[0]; };
-  var avj = function(curData) { return metrics[curData.posj][curData.posj].counts[3]; };
-  var amj = function(curData) { return metrics[curData.posj][curData.posj].counts[0]; };
-
-  var vivj = function(curData) { return curData.counts[3]; };
-  var vimj = function(curData) { return curData.counts[2]; };
-  var mivj = function(curData) { return curData.counts[1]; };
-  var mimj = function(curData) { return curData.counts[0]; };
+  var vivj = function(d) { return pairCounts(d, function(c) { return c.vivj; }) };
+  var vimj = function(d) { return pairCounts(d, function(c) { return c.vimj; }) };
+  var mivj = function(d) { return pairCounts(d, function(c) { return c.mivj; }) };
+  var mimj = function(d) { return pairCounts(d, function(c) { return c.mimj; }) };
   
-  var imreads = function(d) { return refString.charAt(d.posi) + (metrics[d.posi][d.posi].synon || ""); };
-  var jmreads = function(d) { return refString.charAt(d.posj) + (metrics[d.posj][d.posj].synon || ""); };
-  var ivread = function(d, fullcount) { return imreads(d).indexOf(fullcount.base.charAt(0)) == -1; };
-  var jvread = function(d, fullcount) { return jmreads(d).indexOf(fullcount.base.charAt(2)) == -1; };
-  
-  if ($("#dosynonymy").prop('checked')) {
-    // for every pair of reads at this position, check if either side is synonymous and update counts accordingly
-    
-    vi = function(d) { 
-      var count = d.fullcounts.filter(function(e) { return ivread(d, e); });
-      return d3.sum(count, function(e) { return e.num });
-    };
-    
-    mi = function(d) {
-      var count = d.fullcounts.filter(function(e) { return !ivread(d, e); });
-      return d3.sum(count, function(e) { return e.num });
-    };
-    
-    vj = function(d) {
-      var count = d.fullcounts.filter(function(e) { return jvread(d, e); });
-      return d3.sum(count, function(e) { return e.num; });
-    };
-    
-    mj = function(d) {
-      var count = d.fullcounts.filter(function(e) { return !jvread(d, e); });
-      return d3.sum(count, function(e) { return e.num; });
-    };
-    
-    avi = function(d) {
-      var count = metrics[d.posi][d.posi].fullcounts.filter(function(e) { return ivread(d, e); });
-      return d3.sum(count, function(e) { return e.num; });
-    };
-    
-    ami = function(d) {
-      var count = metrics[d.posi][d.posi].fullcounts.filter(function(e) { return !ivread(d, e); });
-      return d3.sum(count, function(e) { return e.num; });
-    };
-    
-    avj = function(d) {
-      var count = metrics[d.posj][d.posj].fullcounts.filter(function(e) { return jvread(d, e); });
-      return d3.sum(count, function(e) { return e.num; });
-    };
-    
-    amj = function(d) {
-      var count = metrics[d.posj][d.posj].fullcounts.filter(function(e) { return !jvread(d, e); });
-      return d3.sum(count, function(e) { return e.num; });
-    };
-    
-    vivj = function(d) {
-      var count = d.fullcounts.filter(function(e) { return ivread(d,e) && jvread(d,e); });
-      return d3.sum(count, function(e) { return e.num; });
-    };
-    
-    vimj = function(d) { 
-      var count = d.fullcounts.filter(function(e) { return ivread(d,e) && !jvread(d,e); });
-      return d3.sum(count, function(e) { return e.num; });
-    };
-    
-    mivj = function(d) {
-      var count = d.fullcounts.filter(function(e) { return !ivread(d,e) && jvread(d,e); });
-      return d3.sum(count, function(e) { return e.num; });
-    };
-    
-    mimj = function(d) {
-      var count = d.fullcounts.filter(function(e) { return !ivread(d,e) && !jvread(d,e); });
-      return d3.sum(count, function(e) { return e.num; });
-    };
-  };
-
+  var fullCount = function(pos, compute) { return compute(getVariantMatrixAtPos(pos, pos)); };
+  var avi = function(d) { return fullCount(d.posi, function(c) { return c.vivj; }); };
+  var ami = function(d) { return fullCount(d.posi, function(c) { return c.mimj; }); };
+  var avj = function(d) { return fullCount(d.posj, function(c) { return c.vivj; }); };
+  var amj = function(d) { return fullCount(d.posj, function(c) { return c.mimj; }); };
   
   // add in the paths now
   // var i to var j
@@ -2159,7 +2095,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     .attr('width', rectW)
     .style('fill', cRed)
     .on('mouseover', function(d) {
-      tc = {pos: d.posj, opos: d.posi, am: amj(d), av: avj(d), vov: vivj(d), vom: mivj(d)};
+      var tc = {pos: d.posj, opos: d.posi, am: amj(d), av: avj(d), vov: vivj(d), vom: mivj(d)};
       if (doTips) posTip.show(tc);
     })
     .on('mouseout', function(d) {
@@ -2178,7 +2114,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     .attr('width', rectW)
     .style('fill', cGreen)
     .on('mouseover', function(d) {
-      tc = {pos: d.posj, opos: d.posi, am: amj(d), av: avj(d), mom: vimj(d), mov: mimj(d)};
+      var tc = {pos: d.posj, opos: d.posi, am: amj(d), av: avj(d), mom: vimj(d), mov: mimj(d)};
       if (doTips) posTip.show(tc);
     })
     .on('mouseout', function(d) {
@@ -2195,7 +2131,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     .attr('width', rectW)
     .style('fill', cRed)
     .on('mouseover', function(d) {
-      tc = {pos: d.posi, opos: d.posj, am: ami(d), av: avi(d), vov: vivj(d), vom: vimj(d)};
+      var tc = {pos: d.posi, opos: d.posj, am: ami(d), av: avi(d), vov: vivj(d), vom: vimj(d)};
       if (doTips) posTip.show(tc);
     })
     .on('mouseout', function(d) {
@@ -2214,7 +2150,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
     .attr('width', rectW)
     .style('fill', cGreen)
     .on('mouseover', function(d) {
-      tc = {pos: d.posi, opos: d.posj, am: ami(d), av: avi(d), mom: mivj(d), mov: mimj(d)};
+      var tc = {pos: d.posi, opos: d.posj, am: ami(d), av: avi(d), mom: mivj(d), mov: mimj(d)};
       if (doTips) posTip.show(tc);
     })
     .on('mouseout', function(d) {
@@ -2250,7 +2186,7 @@ var drawCorrelationDiagram = function(parentGrp, width, height, percentRectWidth
   var exitAngle = Math.PI / 4;
   var len = areaW * 0.15;
   var calcLeaving = function(d, type) {
-    var xDir, yDir, n, start;
+    var xDir, yDir, n;
     switch (type) {
       case "vi":
         xDir = -1; yDir = -1;
@@ -2504,16 +2440,16 @@ $(document).ready(function() {
     $("#keepsynonpairs").prop('disabled', !$("#dosynonymy").prop('checked'));
     
     // filter in all cases unless both checkboxes are checked
-    if (!($("#keepsynonpairs").prop('checked') && $("#dosynonymy").prop('checked')))
-      filterData();
-      
+    //if (!($("#keepsynonpairs").prop('checked') && $("#dosynonymy").prop('checked')))
+    filterData();
     updateVis();
+    
     d3.selectAll("g.jpos").remove();
     if (detailData.length != 0) 
       updateDetail(curPage || 0);
     
     // after all requested filtering is done, keep disabled checkbox checked
-    if (!$("#dosynonymy").prop('checked')) $("#keepsynonpairs").prop('checked', true);
+    // if (!$("#dosynonymy").prop('checked')) $("#keepsynonpairs").prop('checked', true);
   };
   
   $("#dosynonymy").change(synChange);
