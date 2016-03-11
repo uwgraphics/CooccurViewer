@@ -8,7 +8,7 @@ The project seeks to expose correlation of observations made between any pair of
 
 The first is a matrix-based approach (`index.html` in the root folder).  This is a WebGL-based approach for showing all correlations in the full pairwise correlation space.  Please note that your current configuration must support WebGL for this implementation to work; see [WebGL Report](http://webglreport.com/) for details.
 
-The second is a more guided, explicit approach (`d3viewer.html` in the root folder).  This is a [D3](http://d3js.org)-based approach that uses thresholds of particular criteria to filter the data down to managable size.  A demo is availble of the two approaches through [the project website](http://graphics.cs.wisc.edu/Vis/Co-occur/).
+The second is a more guided, explicit approach (`d3viewer.html` in the root folder).  This is a [D3](http://d3js.org)-based approach that uses thresholds of particular criteria to filter the data down to managable size.  A demo is availble of the two approaches through [the project website](http://graphics.cs.wisc.edu/Vis/CooccurViewer/).
 
 ### Documentation
 
