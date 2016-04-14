@@ -1,14 +1,16 @@
 # CooccurViewer
 
-This project is a prototype implementation of the co-occurrence system presented in the under-review work for a potential publication.  
+This project contains the prototype implementations of the co-occurrence system presented in our Computer Graphics Forum paper "[Visualizing Co-occurrence of Events in Populations of Viral Genome Sequences](http://graphics.cs.wisc.edu/Papers/2016/SCDOG16/)."  This work (will be|was) presented at the [EuroVis 2016 conference](http://www.cs.rug.nl/jbi/eurovis2016/Program/FullPapersProgram) on 8 June 2016 in Groningen, NL.  
 
 ![The D3-based Co-occurrence viewer for the SIV dataset](https://raw.githubusercontent.com/uwgraphics/CooccurViewer/master/img/cooccur-teaser.png)
 
-The project seeks to expose correlation of observations made between any pair of events in a data sequence. In this project, we present two methods for identifying interesting co-occurrences (see the associated publication for a more in-depth discussion).  
+The project seeks to expose correlation of observations made between any pair of events in a data sequence. In this project, we present two methods for identifying interesting co-occurrences (see [the manuscript](http://graphics.cs.wisc.edu/Papers/2016/SCDOG16/) for a detailed discussion).  
 
-The first is a matrix-based approach (`index.html` in the root folder).  This is a WebGL-based approach for showing all correlations in the full pairwise correlation space.  Please note that your current configuration must support WebGL for this implementation to work; see [WebGL Report](http://webglreport.com/) for details.
+The first is a matrix-based approach (`index.html` in the root folder).  This is a WebGL-based approach for showing all correlations in the full pairwise correlation space, and is presented as a negative example in the manuscript.  Please note that your current configuration must support WebGL for this implementation to work; see [WebGL Report](http://webglreport.com/) for details.
 
-The second is a more guided, explicit approach (`d3viewer.html` in the root folder).  This is a [D3](http://d3js.org)-based approach that uses thresholds of particular criteria to filter the data down to managable size.  A demo is availble of the two approaches through [the project website](http://graphics.cs.wisc.edu/Vis/CooccurViewer/).
+The second is a more guided, explicit approach (`d3viewer.html` in the root folder), presented as the 'CooccurViewer' application in the manuscript.  This is a [D3](http://d3js.org)-based approach that uses thresholds of particular criteria to filter the data down to managable size.  
+
+**A demo is availble of these two approaches through [the project website](http://graphics.cs.wisc.edu/Vis/CooccurViewer/).**
 
 ### Documentation
 
@@ -42,9 +44,13 @@ Once the output data directory is generated, copy the directory and its contents
 "SIV": {
 	"attenuation": "readBreadth.dat",
 	"metrics": [ "conjProbDiff.dat" ],
-	"variantCounts": "variantCounts.dat",
+	"fullcounts": "fullCounts.dat",
+	"refdata": "reference.dat",
+	"annotations", "sivmac239_proteins.json"
 }
 ```
+
+The `annotations` file is optional.  The annotation file should be a list of anonymous JavaScript objects with the following fields defined at a minimum: `gene` (the name of the annotation) and `locations` (the starting and ending positions of the annotated region, e.g. `9333-10124`).  See the [SIV annotation file for an example](http://graphics.cs.wisc.edu/Vis/CooccurViewer/demo/data/SIV/sivmac239_proteins.json).
 
 Start a local webserver (e.g. `python -m SimpleHTTPServer`), navigate to the appropriate visualization (e.g. `127.0.0.1:8000/d3viewer.html`), and select the desired dataset from the blue dropdown at the top.
 
